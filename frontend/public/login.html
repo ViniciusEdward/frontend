@@ -1,0 +1,49 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DoeFacil - Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+    
+    <div class="auth-container">
+        <div class="auth-box">
+            <div class="auth-logo">
+                <i class="fa-solid fa-hand-holding-heart" style="color: #ff5e62; font-size: 3rem; margin-bottom: 10px;"></i>
+                <h2 style="color: #2C3E50;">DoeFacil</h2>
+                <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">Entre no Ecossistema de Solidariedade</p>
+            </div>
+            
+            <form id="loginForm">
+                <div class="input-group">
+                    <i class="fa-solid fa-envelope"></i>
+                    <input type="email" id="email" placeholder="E-mail" required>
+                </div>
+                
+                <div class="input-group">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" id="senha" placeholder="Senha" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">Entrar</button>
+            </form>
+            
+            <div class="auth-links" style="text-align: center; margin-top: 20px; font-size: 0.9rem;">
+                <p style="margin-bottom: 10px;"><a href="#" style="color: #7f8c8d; text-decoration: underline;">Esqueceu sua senha?</a></p>
+                <p style="color: #7f8c8d;">Novo por aqui? <a href="cadastro.html" style="color: #ff5e62; font-weight: bold; text-decoration: none;">Cadastre-se</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+</body>
+</html>
+
+
+

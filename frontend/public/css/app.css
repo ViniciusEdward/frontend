@@ -73,8 +73,8 @@
 }
 
 .nav-btn.active {
-    background-color: var(--primary-soft);
-    color: var(--primary);
+    background-color: var(--surface);
+    color: var(--primary-dark);
 }
 
 .nav-btn.btn-action {
@@ -82,12 +82,12 @@
     color: white;
     justify-content: center;
     margin: 1rem 0;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+    box-shadow: 0 4px 12px rgba(232, 117, 26, 0.2);
 }
 
 .nav-btn.btn-action:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+    box-shadow: 0 6px 16px rgba(232, 117, 26, 0.3);
 }
 
 /* Tab System */

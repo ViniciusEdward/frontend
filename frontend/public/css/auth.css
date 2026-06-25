@@ -45,7 +45,11 @@
     font-size: 1rem;
 }
 
-.input-group i {
+.auth-logo > i {
+    color: var(--primary) !important;
+}
+
+.input-group > i {
     position: absolute;
     left: 1.25rem;
     top: 50%;
@@ -55,12 +59,19 @@
     transition: var(--transition);
 }
 
-.input-group input:focus + i {
+.input-group:focus-within > i {
     color: var(--primary);
 }
 
 .input-group input {
     padding-left: 3.25rem;
+    color: var(--text-main);
+    background: #F8FAFC;
+}
+
+.input-group input:not(:placeholder-shown) {
+    background: white;
+    border-color: var(--border-color);
 }
 
 .input-row {
@@ -68,16 +79,42 @@
     gap: 1.25rem;
 }
 
+.password-group input {
+    padding-right: 3.5rem;
+}
+
 .password-toggle {
     position: absolute;
     right: 1rem;
     top: 50%;
     transform: translateY(-50%);
-    background: none;
+    width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
     border: none;
     color: var(--secondary-soft);
     cursor: pointer;
-    padding: 0.5rem;
+    padding: 0;
+    border-radius: 999px;
+    z-index: 2;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+    color: var(--primary);
+    background: var(--primary-light);
+    outline: none;
+}
+
+.password-toggle i {
+    position: static;
+    transform: none;
+    color: currentColor;
+    pointer-events: none;
+    font-size: 1rem;
 }
 
 .auth-links {
@@ -91,6 +128,15 @@
     font-weight: 800;
     text-decoration: none;
     transition: var(--transition);
+}
+
+.auth-links p,
+.auth-links a {
+    color: var(--text-muted) !important;
+}
+
+.auth-links a {
+    color: var(--primary) !important;
 }
 
 .auth-links a:hover {

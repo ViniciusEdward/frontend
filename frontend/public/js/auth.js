@@ -102,12 +102,15 @@ if (registerMapElement) {
     initRegisterMap();
 }
 
-const togglePasswordBtn = document.getElementById('togglePassword');
-const senhaCadInput = document.getElementById('senhaCad');
-if (togglePasswordBtn && senhaCadInput) {
+function setupPasswordToggle(buttonId, inputId) {
+    const togglePasswordBtn = document.getElementById(buttonId);
+    const passwordInput = document.getElementById(inputId);
+
+    if (!togglePasswordBtn || !passwordInput) return;
+
     togglePasswordBtn.addEventListener('click', () => {
-        const isPassword = senhaCadInput.type === 'password';
-        senhaCadInput.type = isPassword ? 'text' : 'password';
+        const isPassword = passwordInput.type === 'password';
+        passwordInput.type = isPassword ? 'text' : 'password';
         const icon = togglePasswordBtn.querySelector('i');
         if (icon) {
             icon.classList.toggle('fa-eye');
@@ -116,6 +119,9 @@ if (togglePasswordBtn && senhaCadInput) {
         togglePasswordBtn.setAttribute('aria-label', isPassword ? 'Ocultar senha' : 'Mostrar senha');
     });
 }
+
+setupPasswordToggle('togglePassword', 'senhaCad');
+setupPasswordToggle('toggleLoginPassword', 'senha');
 
 if (cadastroForm) {
     cadastroForm.addEventListener('submit', async (e) => {

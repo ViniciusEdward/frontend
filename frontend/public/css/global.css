@@ -55,7 +55,7 @@ h1, h2, h3, h4 {
     font-weight: 800;
     color: var(--secondary);
     line-height: 1.2;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
 }
 
 /* Buttons - Premium Style */
@@ -131,6 +131,8 @@ h1, h2, h3, h4 {
 /* Forms */
 .input-group {
     margin-bottom: 1.5rem;
+    position: relative;
+    min-width: 0;
 }
 
 label {
@@ -149,7 +151,23 @@ input, textarea, select {
     background: #F8FAFC;
     color: var(--text-main);
     font-size: 0.95rem;
+    line-height: 1.4;
+    caret-color: var(--primary);
+    direction: ltr;
+    text-align: left;
+    min-width: 0;
     transition: var(--transition);
+}
+
+textarea {
+    resize: vertical;
+    overflow-wrap: anywhere;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 0.82;
 }
 
 input:focus, textarea:focus, select:focus {

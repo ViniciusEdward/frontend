@@ -1,3 +1,4 @@
+window.BACKEND_URL = 'https://backend-1z9z.onrender.com';
 // ============= CONFIGURAÇÃO =============
 // Suporta três modos:
 //   1. window.BACKEND_URL definido manualmente (produção / deploy customizado)
@@ -315,39 +316,6 @@ async function solicitarDoacao(iditem) {
         }
     } catch (erro) {
         console.error('Erro:', erro);
-        showToast('Erro de conexão', true);
-    }
-}
-
-async function abrirModalItem(iditem) {
-    try {
-        const res = await fetchAPI(`/itens/${iditem}`);
-        if (!res || !res.ok) {
-            showToast('Erro ao carregar item', true);
-            return;
-        }
-
-        const item = await res.json();
-        const title = document.getElementById('modalTitle');
-        const donor = document.getElementById('modalDonor');
-        const desc = document.getElementById('modalDesc');
-        const actions = document.getElementById('modalActions');
-
-        if (title) title.innerText = item.titulo || 'Item';
-        if (donor) donor.innerText = item.primeironome || 'Usuário';
-        if (desc) desc.innerText = item.descricao || '';
-        if (actions) {
-            actions.innerHTML = `
-                <button class="btn btn-primary" onclick="solicitarDoacao(${Number(item.iditem)}); closeModal('itemModal')">
-                    <i class="fa-solid fa-hand-holding-heart"></i> Solicitar
-                </button>
-                <button class="btn btn-secondary" onclick="closeModal('itemModal')">Fechar</button>
-            `;
-        }
-
-        openProfileModal('itemModal');
-    } catch (erro) {
-        console.error('Erro ao carregar item:', erro);
         showToast('Erro de conexão', true);
     }
 }
@@ -777,7 +745,7 @@ async function carregarMensagensChat() {
         if (!container) return;
 
         container.innerHTML = mensagens.map(msg => `
-            <div class="mensagem ${Number(msg.idusuario_remetente) === Number(currentUser.idusuario) ? 'enviada' : 'recebida'}">
+            <div class="mensagem ${msg.idusuario_remetente === currentUser.idusuario ? 'enviada' : 'recebida'}">
                 <strong>${escapeHtml(msg.primeironome)}:</strong>
                 <p>${escapeHtml(msg.mensagem)}</p>
                 <small>${new Date(msg.data).toLocaleTimeString('pt-BR')}</small>
@@ -804,7 +772,7 @@ async function enviarMensagem() {
             method: 'POST',
             body: JSON.stringify({
                 idusuario_destinatario: destinatarioIdAtual,
-                conteudo: mensagem
+                mensagem
             })
         });
 
@@ -1019,5 +987,7 @@ function escapeHtml(texto) {
     div.textContent = texto;
     return div.innerHTML;
 }
+
+
 
 

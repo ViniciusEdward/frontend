@@ -1,3 +1,4 @@
+window.BACKEND_URL = 'https://backend-1z9z.onrender.com';
 // Configuração de API
 // Suporta três modos:
 //   1. window.BACKEND_URL definido manualmente (produção / deploy customizado)

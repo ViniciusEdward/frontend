@@ -1,20 +1,9 @@
-window.BACKEND_URL = 'https://backend-1z9z.onrender.com';
 // ============= CONFIGURAÇÃO =============
-// Suporta três modos:
-//   1. window.BACKEND_URL definido manualmente (produção / deploy customizado)
-//   2. Live Server / VS Code (porta 5500/5501) → aponta para backend na 3001
-//   3. Servido pelo próprio Express (porta 3001) → same-origin
-const API_BASE_URL = (() => {
-    if (typeof window.BACKEND_URL === 'string' && window.BACKEND_URL) {
-        return window.BACKEND_URL.replace(/\/$/, '') + '/api';
-    }
-    const { protocol, hostname, port } = window.location;
-    const devPorts = ['5500', '5501', '8080', '8081', '3000'];
-    if (devPorts.includes(port)) {
-        return `${protocol}//${hostname}:3001/api`;
-    }
-    return `${protocol}//${window.location.host}/api`;
-})();
+// Configuração de API centralizada em js/config.js (carregado antes deste arquivo no HTML).
+if (typeof window.API_BASE_URL !== 'string' || !window.API_BASE_URL) {
+    console.error('[app.js] window.API_BASE_URL não definido — verifique se js/config.js foi carregado ANTES de js/app.js no HTML.');
+}
+const API_BASE_URL = window.API_BASE_URL;
 
 // ============= ESTADO GLOBAL =============
 let currentUser = null;

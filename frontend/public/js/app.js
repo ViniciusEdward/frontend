@@ -1,11 +1,18 @@
-﻿// ============= CONFIGURAÇÃO =============
+// ============= CONFIGURAÇÃO =============
+// Suporta três modos:
+//   1. window.BACKEND_URL definido manualmente (produção / deploy customizado)
+//   2. Live Server / VS Code (porta 5500/5501) → aponta para backend na 3001
+//   3. Servido pelo próprio Express (porta 3001) → same-origin
 const API_BASE_URL = (() => {
-    const localDevHosts = ['127.0.0.1:5500', 'localhost:5500', '127.0.0.1:3001', 'localhost:3001'];
-    const currentHost = window.location.host;
-    if (localDevHosts.includes(currentHost) || currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
-        return `${window.location.protocol}//${window.location.host}/api`;
+    if (typeof window.BACKEND_URL === 'string' && window.BACKEND_URL) {
+        return window.BACKEND_URL.replace(/\/$/, '') + '/api';
     }
-    return 'https://backend-1z9z.onrender.com/api';
+    const { protocol, hostname, port } = window.location;
+    const devPorts = ['5500', '5501', '8080', '8081', '3000'];
+    if (devPorts.includes(port)) {
+        return `${protocol}//${hostname}:3001/api`;
+    }
+    return `${protocol}//${window.location.host}/api`;
 })();
 
 // ============= ESTADO GLOBAL =============
@@ -125,12 +132,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    const itemPhotoInput = document.getElementById('itemPhoto');
-    const itemPhotoName = document.getElementById('itemPhotoName');
-    if (itemPhotoInput && itemPhotoName) {
-        itemPhotoInput.addEventListener('change', () => {
-            const file = itemPhotoInput.files?.[0];
-            itemPhotoName.innerText = file ? file.name : 'Nenhuma foto selecionada';
+    // Pré-visualização da imagem por URL
+    const itemImageUrlInput = document.getElementById('itemImageUrl');
+    if (itemImageUrlInput) {
+        itemImageUrlInput.addEventListener('input', () => {
+            const url = itemImageUrlInput.value.trim();
+            const preview = document.getElementById('itemImagePreview');
+            const img = document.getElementById('itemImagePreviewImg');
+            if (url && preview && img) {
+                img.src = url;
+                preview.style.display = 'block';
+                img.onerror = () => { preview.style.display = 'none'; };
+            } else if (preview) {
+                preview.style.display = 'none';
+            }
         });
     }
 
@@ -138,6 +153,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await obterLocalizacaoAtual();
     await carregarPerfil();
     carregarItensDoBanco();
+
+    // Polling de mensagens não lidas (a cada 30s)
+    atualizarBadgeMensagens();
+    setInterval(atualizarBadgeMensagens, 30000);
 });
 
 // ============= UI UTILITIES =============
@@ -175,6 +194,18 @@ function updateChatBadge(count) {
         } else {
             badge.style.display = 'none';
         }
+    }
+}
+
+async function atualizarBadgeMensagens() {
+    try {
+        const res = await fetchAPI('/mensagens/nao-lidas');
+        if (res && res.ok) {
+            const dados = await res.json();
+            updateChatBadge(dados.total || 0);
+        }
+    } catch (e) {
+        // Falha silenciosa — badge não crítico
     }
 }
 
@@ -224,24 +255,32 @@ async function carregarItensDoBanco() {
                 : '';
             const isFilaCheia = item.total_na_fila >= limite;
 
+            const imgHtml = item.imagem_url
+                ? `<img class="item-card-img" src="${escapeHtml(item.imagem_url)}" alt="${escapeHtml(item.titulo)}" onerror="this.style.display='none'">`
+                : `<div class="item-card-img-placeholder"><i class="fa-solid fa-box-open"></i></div>`;
+
             return `
                 <div class="item-card">
-                    <div class="item-card-header">
-                        <h3>${escapeHtml(item.titulo)}</h3>
-                        ${filaBadge}
-                    </div>
-                    <p>${escapeHtml(item.descricao || '')}</p>
-                    <p style="font-size: 0.9rem; color: #444;">
-                        📍 ${item.distancia} km • Doador: ${escapeHtml(item.primeironome)}
-                    </p>
-                    <p style="font-size: 0.85rem; color: var(--primary-dark);">
-                        ✓ Disponível
-                    </p>
-                    ${diasText}
-                    <div class="item-card-actions">
-                        <button class="btn btn-primary" onclick="solicitarDoacao(${item.iditem})" ${isFilaCheia ? 'disabled' : ''}>
-                            ${isFilaCheia ? 'Fila cheia' : 'Solicitar'}
-                        </button>
+                    ${imgHtml}
+                    <div class="item-card-body">
+                        <div class="item-card-header">
+                            <h3>${escapeHtml(item.titulo)}</h3>
+                            ${filaBadge}
+                        </div>
+                        <p>${escapeHtml(item.descricao || '')}</p>
+                        <p style="font-size: 0.85rem; color: var(--text-muted);">
+                            📍 ${item.distancia} km • 👤 ${escapeHtml(item.primeironome)}
+                        </p>
+                        ${diasText}
+                        <div class="item-card-actions">
+                            <button class="btn btn-primary" onclick="solicitarDoacao(${item.iditem})" ${isFilaCheia ? 'disabled' : ''}>
+                                <i class="fa-solid fa-hand-holding-heart"></i>
+                                ${isFilaCheia ? 'Fila cheia' : 'Solicitar'}
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="abrirModalItem(${item.iditem})">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -276,6 +315,39 @@ async function solicitarDoacao(iditem) {
         }
     } catch (erro) {
         console.error('Erro:', erro);
+        showToast('Erro de conexão', true);
+    }
+}
+
+async function abrirModalItem(iditem) {
+    try {
+        const res = await fetchAPI(`/itens/${iditem}`);
+        if (!res || !res.ok) {
+            showToast('Erro ao carregar item', true);
+            return;
+        }
+
+        const item = await res.json();
+        const title = document.getElementById('modalTitle');
+        const donor = document.getElementById('modalDonor');
+        const desc = document.getElementById('modalDesc');
+        const actions = document.getElementById('modalActions');
+
+        if (title) title.innerText = item.titulo || 'Item';
+        if (donor) donor.innerText = item.primeironome || 'Usuário';
+        if (desc) desc.innerText = item.descricao || '';
+        if (actions) {
+            actions.innerHTML = `
+                <button class="btn btn-primary" onclick="solicitarDoacao(${Number(item.iditem)}); closeModal('itemModal')">
+                    <i class="fa-solid fa-hand-holding-heart"></i> Solicitar
+                </button>
+                <button class="btn btn-secondary" onclick="closeModal('itemModal')">Fechar</button>
+            `;
+        }
+
+        openProfileModal('itemModal');
+    } catch (erro) {
+        console.error('Erro ao carregar item:', erro);
         showToast('Erro de conexão', true);
     }
 }
@@ -315,6 +387,8 @@ async function criarDoacao() {
             return;
         }
 
+        const imagem_url = document.getElementById('itemImageUrl')?.value.trim() || '';
+
         const res = await fetchAPI('/itens', {
             method: 'POST',
             body: JSON.stringify({
@@ -323,7 +397,8 @@ async function criarDoacao() {
                 limiteFila,
                 prazo_dias,
                 latitude,
-                longitude
+                longitude,
+                imagem_url: imagem_url || undefined
             })
         });
 
@@ -422,16 +497,23 @@ async function carregarAtividades() {
             `;
         }).join('') : '<p style="padding: 1rem; color: var(--text-muted);">Nenhuma solicitação ativa no momento.</p>';
 
-        doacoes.innerHTML = criacoes.length > 0 ? criacoes.map(item => `
+        doacoes.innerHTML = criacoes.length > 0 ? criacoes.map(item => {
+            const imgHtml = item.imagem_url
+                ? `<img class="item-card-img" src="${escapeHtml(item.imagem_url)}" alt="${escapeHtml(item.titulo)}" onerror="this.style.display='none'">`
+                : `<div class="item-card-img-placeholder"><i class="fa-solid fa-box-open"></i></div>`;
+            return `
             <div class="item-card">
-                <h4>${escapeHtml(item.titulo)}</h4>
-                <p>${escapeHtml(item.descricao || '')}</p>
-                <p style="font-size: 0.85rem; color: var(--text-muted);">Criado em ${new Date(item.data).toLocaleDateString('pt-BR')}</p>
-                <div class="item-card-actions">
-                    <button class="btn btn-secondary" onclick="navigateTab('myDonationsTab')">Ver Detalhes</button>
+                ${imgHtml}
+                <div class="item-card-body">
+                    <h4 style="font-size:1rem; color:var(--secondary);">${escapeHtml(item.titulo)}</h4>
+                    <p>${escapeHtml(item.descricao || '')}</p>
+                    <p style="font-size: 0.82rem; color: var(--text-muted);">📅 ${new Date(item.data).toLocaleDateString('pt-BR')}</p>
+                    <div class="item-card-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="navigateTab('myDonationsTab')">Ver Detalhes</button>
+                    </div>
                 </div>
-            </div>
-        `).join('') : '<p style="padding: 1rem; color: var(--text-muted);">Você ainda não publicou doações.</p>';
+            </div>`;
+        }).join('') : '<p style="padding: 1rem; color: var(--text-muted);">Você ainda não publicou doações.</p>';
     } catch (erro) {
         console.error('Erro:', erro);
         showToast('Erro ao carregar atividades', true);
@@ -442,12 +524,6 @@ function openProfileModal(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
     modal.style.display = 'flex';
-}
-
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (!modal) return;
-    modal.style.display = 'none';
 }
 
 function handleChatEnter(event) {
@@ -551,23 +627,26 @@ async function carregarMinhasDoacoes() {
 
         list.innerHTML = itens.map(item => {
             const limite = item.limite_fila || 10;
+            const imgHtml = item.imagem_url
+                ? `<img class="item-card-img" src="${escapeHtml(item.imagem_url)}" alt="${escapeHtml(item.titulo)}" onerror="this.style.display='none'">`
+                : `<div class="item-card-img-placeholder"><i class="fa-solid fa-box-open"></i></div>`;
             return `
                 <div class="item-card">
-                    <h4>${escapeHtml(item.titulo)}</h4>
-                    <p>${escapeHtml(item.descricao || '')}</p>
-                    <p style="font-size:0.85rem;color:var(--text-muted)">
-                        📍 ${item.distancia ? item.distancia + ' km' : 'Localização definida'}
-                    </p>
-                    <p style="font-size:0.85rem;color:var(--primary-dark)">
-                        Fila: ${item.total_na_fila || 0}/${limite}
-                    </p>
-                    <div class="item-card-actions">
-                        <button class="btn btn-secondary" onclick="verFila(${item.iditem})">
-                            <i class="fa-solid fa-users"></i> Ver Fila
-                        </button>
-                        <button class="btn btn-primary" onclick="finalizarDoacaoAntecipada(${item.iditem})">
-                            <i class="fa-solid fa-flag-checkered"></i> Finalizar Agora
-                        </button>
+                    ${imgHtml}
+                    <div class="item-card-body">
+                        <h4 style="font-size:1rem;color:var(--secondary);">${escapeHtml(item.titulo)}</h4>
+                        <p>${escapeHtml(item.descricao || '')}</p>
+                        <p style="font-size:0.82rem;color:var(--text-muted);">
+                            Fila: ${item.total_na_fila || 0}/${limite}
+                        </p>
+                        <div class="item-card-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="verFila(${item.iditem})">
+                                <i class="fa-solid fa-users"></i> Fila
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="finalizarDoacaoAntecipada(${item.iditem})">
+                                <i class="fa-solid fa-flag-checkered"></i> Finalizar
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -671,7 +750,12 @@ async function abrirChat(idusuario) {
     if (modal) {
         modal.style.display = 'flex';
         carregarMensagensChat();
-        
+
+        // Marcar mensagens como lidas e atualizar badge
+        fetchAPI(`/mensagens/marcar-lidas/${idusuario}`, { method: 'POST' })
+            .then(() => atualizarBadgeMensagens())
+            .catch(() => {});
+
         // Iniciar polling
         if (chatInterval) clearInterval(chatInterval);
         chatInterval = setInterval(carregarMensagensChat, 3000);
@@ -693,7 +777,7 @@ async function carregarMensagensChat() {
         if (!container) return;
 
         container.innerHTML = mensagens.map(msg => `
-            <div class="mensagem ${msg.idusuario_remetente === currentUser.idusuario ? 'enviada' : 'recebida'}">
+            <div class="mensagem ${Number(msg.idusuario_remetente) === Number(currentUser.idusuario) ? 'enviada' : 'recebida'}">
                 <strong>${escapeHtml(msg.primeironome)}:</strong>
                 <p>${escapeHtml(msg.mensagem)}</p>
                 <small>${new Date(msg.data).toLocaleTimeString('pt-BR')}</small>
@@ -720,7 +804,7 @@ async function enviarMensagem() {
             method: 'POST',
             body: JSON.stringify({
                 idusuario_destinatario: destinatarioIdAtual,
-                mensagem
+                conteudo: mensagem
             })
         });
 
@@ -935,7 +1019,5 @@ function escapeHtml(texto) {
     div.textContent = texto;
     return div.innerHTML;
 }
-
-
 
 

@@ -1,6 +1,13 @@
 ﻿// Support and Help Features
 let supportMessages = [];
 
+function escaparTexto(texto) {
+    if (!texto) return '';
+    const div = document.createElement('div');
+    div.textContent = texto;
+    return div.innerHTML;
+}
+
 function inicializarSupport() {
     const supportMsg = document.getElementById('supportMessages');
     if (supportMsg && supportMessages.length === 0) {
@@ -16,7 +23,7 @@ function atualizarSupportUI() {
     if (!container) return;
     container.innerHTML = supportMessages.map(msg => `
         <div style="padding: 10px; margin-bottom: 5px; border-radius: 12px; max-width: 80%; ${msg.tipo === 'user' ? 'background: var(--primary); color: white; align-self: flex-end; margin-left: auto;' : 'background: #f1f1f1; color: var(--text-dark); align-self: flex-start;'}">
-            <div>${msg.texto}</div>
+            <div>${escaparTexto(msg.texto)}</div>
         </div>
     `).join('');
     container.scrollTop = container.scrollHeight;

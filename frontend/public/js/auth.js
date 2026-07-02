@@ -1,11 +1,18 @@
-﻿// Configuração de API
+// Configuração de API
+// Suporta três modos:
+//   1. window.BACKEND_URL definido manualmente (produção / deploy customizado)
+//   2. Live Server / VS Code (porta 5500/5501) → aponta para backend na 3001
+//   3. Servido pelo próprio Express (porta 3001) → same-origin
 const API_BASE_URL = (() => {
-    const localDevHosts = ['127.0.0.1:5500', 'localhost:5500', '127.0.0.1:3001', 'localhost:3001'];
-    const currentHost = window.location.host;
-    if (localDevHosts.includes(currentHost) || currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
-        return `${window.location.protocol}//${window.location.host}/api`;
+    if (typeof window.BACKEND_URL === 'string' && window.BACKEND_URL) {
+        return window.BACKEND_URL.replace(/\/$/, '') + '/api';
     }
-    return 'https://backend-1z9z.onrender.com/api';
+    const { protocol, hostname, port } = window.location;
+    const devPorts = ['5500', '5501', '8080', '8081', '3000'];
+    if (devPorts.includes(port)) {
+        return `${protocol}//${hostname}:3001/api`;
+    }
+    return `${protocol}//${window.location.host}/api`;
 })();
 
 // Função para exibir notificações

@@ -1,9 +1,12 @@
 // ============= CONFIGURAÇÃO =============
-// Configuração de API centralizada em js/config.js (carregado antes deste arquivo no HTML).
-if (typeof window.API_BASE_URL !== 'string' || !window.API_BASE_URL) {
-    console.error('[app.js] window.API_BASE_URL não definido — verifique se js/config.js foi carregado ANTES de js/app.js no HTML.');
-}
-const API_BASE_URL = window.API_BASE_URL;
+// URL do backend — desenvolvimento usa localhost:3001, produção usa Render
+const API_BASE_URL = (() => {
+    const h = window.location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1') {
+        return `${window.location.protocol}//${h}:3001/api`;
+    }
+    return 'https://backend-1z9z.onrender.com/api';
+})();
 
 // ============= ESTADO GLOBAL =============
 let currentUser = null;
@@ -976,7 +979,3 @@ function escapeHtml(texto) {
     div.textContent = texto;
     return div.innerHTML;
 }
-
-
-
-

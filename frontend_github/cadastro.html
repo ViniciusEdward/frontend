@@ -1,0 +1,110 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doefacil - Cadastro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+    
+    <div class="auth-container">
+        <div class="auth-box" style="max-width: 500px;">
+            <div class="auth-logo">
+                <h2 style="color: #2C3E50;">Criar Conta</h2>
+                <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">Preencha seus dados para participar</p>
+            </div>
+            
+            <form id="cadastroForm">
+                <div class="input-row">
+                    <div class="input-group" style="flex: 1;">
+                        <i class="fa-solid fa-user"></i>
+                        <input type="text" id="primeironome" placeholder="Nome" required>
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <input type="text" id="sobrenome" placeholder="Sobrenome" required style="padding-left: 15px;">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <i class="fa-solid fa-id-card"></i>
+                    <input type="text" id="cpf" placeholder="CPF (somente números)" maxlength="11" required>
+                </div>
+
+                <div class="input-group">
+                    <i class="fa-solid fa-envelope"></i>
+                    <input type="email" id="emailCad" placeholder="E-mail" required>
+                </div>
+                
+                <div class="input-group password-group">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" id="senhaCad" placeholder="Senha" required>
+                    <button type="button" id="togglePassword" class="password-toggle" aria-label="Mostrar senha">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+
+                <div class="input-row">
+                    <div class="input-group" style="width: 80px;">
+                        <i class="fa-solid fa-phone"></i>
+                        <input type="text" id="ddd" placeholder="DDD" maxlength="2" required>
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <input type="text" id="telefone" placeholder="Telefone" required style="padding-left: 15px;">
+                    </div>
+                </div>
+
+                <div class="input-row">
+                    <div class="input-group" style="width: 80px;">
+                        <i class="fa-solid fa-map"></i>
+                        <input type="text" id="estado" placeholder="UF" maxlength="2" required>
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <input type="text" id="cidade" placeholder="Cidade" required style="padding-left: 15px;">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <input type="text" id="bairro" placeholder="Bairro">
+                </div>
+
+                <div class="input-row">
+                    <div class="input-group" style="flex: 2;">
+                        <i class="fa-solid fa-road"></i>
+                        <input type="text" id="logradouro" placeholder="Rua/Avenida">
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <input type="text" id="numero" placeholder="Número" style="padding-left: 15px;">
+                    </div>
+                </div>
+
+                <div style="margin-top: 15px;">
+                    <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 10px;">Selecione sua localização no mapa abaixo. Clique no mapa para definir seu ponto.</p>
+                    <div id="registerMap" style="height: 260px; border-radius: 16px; overflow: hidden; border: 1px solid #ddd;"></div>
+                    <p id="registerLocationInfo" style="color: #7f8c8d; font-size: 0.85rem; margin-top: 10px;">Localização ainda não selecionada. Clique no mapa para preencher o endereço.</p>
+                    <input type="hidden" id="latitude" name="latitude">
+                    <input type="hidden" id="longitude" name="longitude">
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">Finalizar Cadastro</button>
+            </form>
+            
+            <div class="auth-links" style="text-align: center; margin-top: 20px; font-size: 0.9rem;">
+                <p style="color: #7f8c8d;">Já tem uma conta? <a href="index.html" style="color: #ff5e62; font-weight: bold; text-decoration: none;">Faça Login</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+</body>
+</html>
+
+

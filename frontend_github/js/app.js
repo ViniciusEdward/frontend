@@ -485,46 +485,10 @@ function openProfileModal(modalId) {
     modal.style.display = 'flex';
 }
 
-async function abrirModalItem(iditem) {
-    try {
-        const res = await fetchAPI('/itens/' + iditem);
-        if (!res || !res.ok) { showToast('Erro ao carregar item', true); return; }
-        const item = await res.json();
-
-        const titleEl   = document.getElementById('modalTitle');
-        const donorEl   = document.getElementById('modalDonor');
-        const descEl    = document.getElementById('modalDesc');
-        const actionsEl = document.getElementById('modalActions');
-
-        if (titleEl) titleEl.innerText = item.titulo || '';
-        if (donorEl) donorEl.innerText = item.primeironome || '';
-
-        if (descEl) {
-            const img = item.imagem_url
-                ? '<img src="' + escapeHtml(item.imagem_url) + '" alt="Foto" style="width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin-top:0.75rem;">'
-                : '';
-            const dist = item.distancia !== undefined ? item.distancia + ' km' : 'Distância desconhecida';
-            descEl.innerHTML = '<p>' + (item.descricao || 'Sem descrição.') + '</p>' + img +
-                '<p style="margin-top:0.75rem;font-size:0.85rem;color:var(--text-muted);">📍 ' + dist + ' • 👤 ' + escapeHtml(item.primeironome || '') + '</p>';
-        }
-
-        if (actionsEl) {
-            const isFilaCheia = item.total_na_fila >= (item.limite_fila || 10);
-            actionsEl.innerHTML = [
-                '<button class="btn btn-primary"',
-                isFilaCheia ? ' disabled' : '',
-                ' onclick="solicitarDoacao(' + item.iditem + ');closeModal(&quot;itemModal&quot;)">',
-                '<i class="fa-solid fa-hand-holding-heart"></i> ',
-                isFilaCheia ? 'Fila cheia' : 'Solicitar',
-                '</button>',
-                '<button class="btn btn-secondary" onclick="closeModal(&quot;itemModal&quot;)">Fechar</button>'
-            ].join('');
-        }
-
-        openProfileModal('itemModal');
-    } catch (erro) {
-        console.error('Erro ao abrir item:', erro);
-        showToast('Erro ao carregar detalhes do item', true);
+function handleChatEnter(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        sendChatMessage();
     }
 }
 

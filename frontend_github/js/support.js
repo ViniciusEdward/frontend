@@ -1,4 +1,4 @@
-﻿// Support and Help Features
+// Support and Help Features
 let supportMessages = [];
 
 function escaparTexto(texto) {
@@ -43,7 +43,7 @@ async function sendSupportMessage() {
         { regex: /\beditar perfil\b|\bcomo editar perfil\b|\bcomo faço para editar perfil\b|\beditar meu perfil\b/i, texto: 'Para editar seu perfil, vá à página de perfil, atualize seus dados e confirme as alterações. Assim você mantém seus dados e localização sempre corretos.' },
         { regex: /\bcomo usar\b|\bcomo funciona\b|\bcomo\b.*\bDoefacil\b|\bcomo\b.*\busar\b/i, texto: 'Para usar o Doefacil: 1) Cadastre-se, 2) Crie doações ou solicite itens, 3) Localize no mapa, 4) Chat com doadores, 5) Combine a retirada.' },
         { regex: /\bdoa(c|ç)\b|\bdoa(c|ç)(?:ão|oes)?\b|\bdoar\b/i, texto: 'Para criar uma doação: vá para a aba de doações, preencha os dados do item, selecione a localização no mapa e publique.' },
-        { regex: /\bsolicitar\b|\bsolicitação\b|\bsolicitar um item\b|\bpegar\b/i, texto: 'Para solicitar um item: encontre um doador no feed, clique em "Ver Detalhes" e depois em "Solicitar Item".' },
+        { regex: /\bsolicitar\b|\bsolicitação\b|\bsolicitar um item\b|\bpegar\b/i, texto: 'Para solicitar um item: encontre uma doação no feed e clique em "Solicitar". O botão de olho mostra a fila completa em tempo real.' },
         { regex: /\bmapa\b|\blocaliza(c|ç)\b|\bgeolocalização\b/i, texto: 'O mapa mostra onde estão os itens doados. Use-o para encontrar doações mais próximas e combinar a retirada com mais facilidade.' },
         { regex: /\bsuporte\b|\bcontato\b|\bajuda\b/i, texto: 'Você pode usar este chat para suporte ou enviar um email para suporte@doefacil.com. Descreva o problema claramente para receber a resposta certa.' },
         { regex: /\bproximidade\b|\bpr(o|ó)ximo\b|\bdist(â|a)ncia\b/i, texto: 'Os itens mais próximos aparecem primeiro para facilitar o encontro e reduzir o tempo de retirada.' },

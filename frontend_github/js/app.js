@@ -14,6 +14,9 @@ let currentItems = [];
 let chatInterval = null;
 let destinatarioIdAtual = null;
 let itemBeingEdited = null;
+let selectedItemImageDataUrl = '';
+let queueModalInterval = null;
+let queueModalItemId = null;
 let map = null;
 let userLocation = { latitude: -12.97, longitude: -38.50 };
 
@@ -79,6 +82,139 @@ async function buscarPosicaoNaFila(iditem) {
     }
 }
 
+
+function isValidImageSrc(src) {
+    if (typeof src !== 'string') return false;
+    const value = src.trim();
+    if (!value) return false;
+    if (/^data:image\/(jpeg|jpg|png|webp);base64,[a-z0-9+/=\s]+$/i.test(value)) return true;
+    if (/^\/uploads\/items\/[a-z0-9._-]+\.(jpe?g|png|webp)$/i.test(value)) return true;
+    try {
+        const parsed = new URL(value, window.location.origin);
+        return ['http:', 'https:'].includes(parsed.protocol) && !/[<>"'`]/.test(value);
+    } catch (erro) {
+        return false;
+    }
+}
+
+function safeImageSrc(src) {
+    const value = typeof src === 'string' ? src.trim() : '';
+    return isValidImageSrc(value) ? value : '';
+}
+
+function renderItemImage(item, extraClass = '') {
+    const title = escapeHtml(item?.titulo || 'Item para doação');
+    const src = safeImageSrc(item?.imagem_url || item?.imagemUrl || '');
+    if (!src) {
+        return `<div class="item-card-img-placeholder ${extraClass}"><i class="fa-solid fa-box-open"></i></div>`;
+    }
+    return `<img class="item-card-img ${extraClass}" src="${escapeHtml(src)}" alt="${title}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-card-img-placeholder ${extraClass}',innerHTML:'<i class=&quot;fa-solid fa-box-open&quot;></i>'}))">`;
+}
+
+function safeInlineString(value) {
+    return JSON.stringify(String(value || '')).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function formatDateTime(value) {
+    if (!value) return 'Data indisponível';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Data indisponível';
+    return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function limparImagemSelecionada() {
+    selectedItemImageDataUrl = '';
+    const input = document.getElementById('itemImageFile');
+    const preview = document.getElementById('itemImagePreview');
+    const img = document.getElementById('itemImagePreviewImg');
+    const name = document.getElementById('itemImageFileName');
+    if (input) input.value = '';
+    if (img) img.src = '';
+    if (name) name.textContent = '';
+    if (preview) preview.style.display = 'none';
+}
+
+function carregarImagemSelecionada(file) {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!file) {
+        limparImagemSelecionada();
+        return;
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+        showToast('Use uma imagem JPG, PNG ou WebP.', true);
+        limparImagemSelecionada();
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('A imagem deve ter no máximo 5 MB.', true);
+        limparImagemSelecionada();
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        const dataUrl = String(reader.result || '');
+        if (!isValidImageSrc(dataUrl)) {
+            showToast('Imagem inválida ou corrompida.', true);
+            limparImagemSelecionada();
+            return;
+        }
+
+        selectedItemImageDataUrl = dataUrl;
+        const preview = document.getElementById('itemImagePreview');
+        const img = document.getElementById('itemImagePreviewImg');
+        const name = document.getElementById('itemImageFileName');
+        if (img) img.src = dataUrl;
+        if (name) name.textContent = file.name;
+        if (preview) preview.style.display = 'flex';
+    };
+    reader.onerror = () => {
+        showToast('Não foi possível ler a imagem selecionada.', true);
+        limparImagemSelecionada();
+    };
+    reader.readAsDataURL(file);
+}
+
+function inicializarUploadImagemDoacao() {
+    const fileInput = document.getElementById('itemImageFile');
+    const chooseBtn = document.getElementById('itemImageChooseBtn');
+    const changeBtn = document.getElementById('itemImageChangeBtn');
+    const removeBtn = document.getElementById('itemImageRemoveBtn');
+    const dropZone = document.getElementById('itemImageDropZone');
+    if (!fileInput) return;
+
+    const openPicker = () => fileInput.click();
+    if (chooseBtn) chooseBtn.addEventListener('click', openPicker);
+    if (changeBtn) changeBtn.addEventListener('click', openPicker);
+    if (removeBtn) removeBtn.addEventListener('click', limparImagemSelecionada);
+
+    fileInput.addEventListener('change', () => carregarImagemSelecionada(fileInput.files?.[0]));
+
+    if (dropZone) {
+        ['dragenter', 'dragover'].forEach((eventName) => {
+            dropZone.addEventListener(eventName, (event) => {
+                event.preventDefault();
+                dropZone.classList.add('drag-over');
+            });
+        });
+        ['dragleave', 'drop'].forEach((eventName) => {
+            dropZone.addEventListener(eventName, (event) => {
+                event.preventDefault();
+                dropZone.classList.remove('drag-over');
+            });
+        });
+        dropZone.addEventListener('drop', (event) => carregarImagemSelecionada(event.dataTransfer?.files?.[0]));
+    }
+}
+
 // ============= INICIALIZAÇÃO =============
 async function obterLocalizacaoAtual() {
     return new Promise((resolve) => {
@@ -124,22 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Pré-visualização da imagem por URL
-    const itemImageUrlInput = document.getElementById('itemImageUrl');
-    if (itemImageUrlInput) {
-        itemImageUrlInput.addEventListener('input', () => {
-            const url = itemImageUrlInput.value.trim();
-            const preview = document.getElementById('itemImagePreview');
-            const img = document.getElementById('itemImagePreviewImg');
-            if (url && preview && img) {
-                img.src = url;
-                preview.style.display = 'block';
-                img.onerror = () => { preview.style.display = 'none'; };
-            } else if (preview) {
-                preview.style.display = 'none';
-            }
-        });
-    }
+    inicializarUploadImagemDoacao();
 
     inicializarSupport();
     await obterLocalizacaoAtual();
@@ -247,9 +368,7 @@ async function carregarItensDoBanco() {
                 : '';
             const isFilaCheia = item.total_na_fila >= limite;
 
-            const imgHtml = item.imagem_url
-                ? `<img class="item-card-img" src="${escapeHtml(item.imagem_url)}" alt="${escapeHtml(item.titulo)}" onerror="this.style.display='none'">`
-                : `<div class="item-card-img-placeholder"><i class="fa-solid fa-box-open"></i></div>`;
+            const imgHtml = renderItemImage(item);
 
             return `
                 <div class="item-card">
@@ -269,7 +388,7 @@ async function carregarItensDoBanco() {
                                 <i class="fa-solid fa-hand-holding-heart"></i>
                                 ${isFilaCheia ? 'Fila cheia' : 'Solicitar'}
                             </button>
-                            <button class="btn btn-secondary btn-sm" onclick="abrirModalItem(${item.iditem})">
+                            <button class="btn btn-secondary btn-sm" onclick="abrirModalFilaCompleta(${item.iditem})">
                                 <i class="fa-solid fa-eye"></i>
                             </button>
                         </div>
@@ -346,7 +465,7 @@ async function criarDoacao() {
             return;
         }
 
-        const imagem_url = document.getElementById('itemImageUrl')?.value.trim() || '';
+        const imagem_url = selectedItemImageDataUrl || '';
 
         const res = await fetchAPI('/itens', {
             method: 'POST',
@@ -366,6 +485,7 @@ async function criarDoacao() {
         if (res.ok) {
             showToast('Item criado com sucesso!');
             document.getElementById('donateForm').reset();
+            limparImagemSelecionada();
             document.getElementById('coordsDisplay').innerText = 'Coordenadas: será preenchido ao clicar';
             navigateTab('myDonationsTab');
         } else {
@@ -385,7 +505,10 @@ function formatStatus(status) {
         'aguardando_entrega': 'Aguardando Entrega',
         'em_processo': 'Em Processo de Entrega',
         'entregue': 'Entregue',
-        'cancelado': 'Cancelado'
+        'cancelado': 'Cancelado',
+        'disponivel': 'Disponível',
+        'reservada': 'Reservada',
+        'finalizada': 'Finalizada'
     };
     return map[status] || status;
 }
@@ -424,8 +547,11 @@ async function carregarAtividades() {
             if (item.status === 'entregue') statusClass += ' success';
             if (item.status === 'cancelado') statusClass += ' danger';
 
+            const imgHtml = renderItemImage(item);
             return `
                 <div class="item-card">
+                    ${imgHtml}
+                    <div class="item-card-body">
                     <h4>${escapeHtml(item.titulo)}</h4>
                     <p>${escapeHtml(item.descricao || '')}</p>
                     <p style="font-size: 0.9rem; color: var(--text-muted);">Doador: ${escapeHtml(item.primeironome || 'Usuário')}</p>
@@ -444,7 +570,7 @@ async function carregarAtividades() {
                                 <i class="fa-solid fa-comments"></i> Combinar Entrega
                             </button>` : ''}
                         ${item.status === 'entregue' ? `
-                            <button class="btn btn-secondary" onclick="abrirAvaliacao(${item.id}, ${item.idusuario_doador}, '${escapeHtml(item.primeironome || '')}')">
+                            <button class="btn btn-secondary" onclick="abrirAvaliacao(${item.id}, ${item.idusuario_doador}, ${safeInlineString(item.primeironome || '')})">
                                 <i class="fa-solid fa-star"></i> Avaliar Doador
                             </button>` : ''}
                         ${item.status === 'pendente' ? `
@@ -452,14 +578,13 @@ async function carregarAtividades() {
                                 <i class="fa-solid fa-xmark"></i> Cancelar Solicitação
                             </button>` : ''}
                     </div>
+                    </div>
                 </div>
             `;
         }).join('') : '<p style="padding: 1rem; color: var(--text-muted);">Nenhuma solicitação ativa no momento.</p>';
 
         doacoes.innerHTML = criacoes.length > 0 ? criacoes.map(item => {
-            const imgHtml = item.imagem_url
-                ? `<img class="item-card-img" src="${escapeHtml(item.imagem_url)}" alt="${escapeHtml(item.titulo)}" onerror="this.style.display='none'">`
-                : `<div class="item-card-img-placeholder"><i class="fa-solid fa-box-open"></i></div>`;
+            const imgHtml = renderItemImage(item);
             return `
             <div class="item-card">
                 ${imgHtml}
@@ -468,7 +593,7 @@ async function carregarAtividades() {
                     <p>${escapeHtml(item.descricao || '')}</p>
                     <p style="font-size: 0.82rem; color: var(--text-muted);">📅 ${new Date(item.data).toLocaleDateString('pt-BR')}</p>
                     <div class="item-card-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="navigateTab('myDonationsTab')">Ver Detalhes</button>
+                        <button class="btn btn-secondary btn-sm" onclick="abrirDetalhesDoacao(${item.iditem})">Ver Detalhes</button>
                     </div>
                 </div>
             </div>`;
@@ -586,9 +711,7 @@ async function carregarMinhasDoacoes() {
 
         list.innerHTML = itens.map(item => {
             const limite = item.limite_fila || 10;
-            const imgHtml = item.imagem_url
-                ? `<img class="item-card-img" src="${escapeHtml(item.imagem_url)}" alt="${escapeHtml(item.titulo)}" onerror="this.style.display='none'">`
-                : `<div class="item-card-img-placeholder"><i class="fa-solid fa-box-open"></i></div>`;
+            const imgHtml = renderItemImage(item);
             return `
                 <div class="item-card">
                     ${imgHtml}
@@ -599,6 +722,9 @@ async function carregarMinhasDoacoes() {
                             Fila: ${item.total_na_fila || 0}/${limite}
                         </p>
                         <div class="item-card-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="abrirDetalhesDoacao(${item.iditem})">
+                                <i class="fa-solid fa-circle-info"></i> Detalhes
+                            </button>
                             <button class="btn btn-secondary btn-sm" onclick="verFila(${item.iditem})">
                                 <i class="fa-solid fa-users"></i> Fila
                             </button>
@@ -613,6 +739,105 @@ async function carregarMinhasDoacoes() {
     } catch (erro) {
         console.error('Erro ao carregar minhas doações:', erro);
         list.innerHTML = '<p style="padding:1rem;color:var(--text-muted)">Erro ao carregar suas doações.</p>';
+    }
+}
+
+
+async function abrirDetalhesDoacao(iditem) {
+    try {
+        const res = await fetchAPI(`/itens/${iditem}`);
+        if (!res || !res.ok) {
+            showToast('Erro ao carregar detalhes da doação', true);
+            return;
+        }
+
+        const item = await res.json();
+        const modal = document.getElementById('itemModal');
+        const title = document.getElementById('modalTitle');
+        const donor = document.getElementById('modalDonor');
+        const desc = document.getElementById('modalDesc');
+        const actions = document.getElementById('modalActions');
+        if (!modal || !title || !desc || !actions) return;
+
+        title.textContent = item.titulo || 'Detalhes da doação';
+        if (donor) donor.textContent = item.primeironome || 'Usuário';
+        desc.innerHTML = `
+            <div class="details-modal-body">
+                ${renderItemImage(item, 'details-image')}
+                <p>${escapeHtml(item.descricao || 'Sem descrição.')}</p>
+                <div class="details-meta">
+                    <span><i class="fa-solid fa-users"></i> Fila: ${Number(item.total_na_fila || 0)}/${Number(item.limite_fila || 10)}</span>
+                    <span><i class="fa-solid fa-circle-info"></i> Status: ${escapeHtml(formatStatus(item.status || 'disponivel'))}</span>
+                </div>
+            </div>
+        `;
+        actions.innerHTML = '<button class="btn btn-secondary" onclick="closeModal(\'itemModal\')">Fechar</button>';
+        openProfileModal('itemModal');
+    } catch (erro) {
+        console.error('Erro ao abrir detalhes:', erro);
+        showToast('Erro de conexão ao carregar detalhes', true);
+    }
+}
+
+async function abrirModalFilaCompleta(iditem) {
+    queueModalItemId = iditem;
+    const modal = document.getElementById('queueModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    await carregarFilaCompletaModal(iditem);
+
+    if (queueModalInterval) clearInterval(queueModalInterval);
+    queueModalInterval = setInterval(() => {
+        if (queueModalItemId) carregarFilaCompletaModal(queueModalItemId, true);
+    }, 5000);
+}
+
+async function carregarFilaCompletaModal(iditem, silent = false) {
+    try {
+        const res = await fetchAPI(`/itens/${iditem}/fila-completa`);
+        if (!res || !res.ok) {
+            if (!silent) showToast('Erro ao carregar a fila completa', true);
+            return;
+        }
+
+        const dados = await res.json();
+        const item = dados.item || {};
+        const fila = Array.isArray(dados.fila) ? dados.fila : [];
+        const limite = item.limite_fila || dados.limite_fila || 0;
+
+        const title = document.getElementById('queueModalTitle');
+        const subtitle = document.getElementById('queueModalSubtitle');
+        const count = document.getElementById('queueModalCount');
+        const image = document.getElementById('queueModalItemImage');
+        const list = document.getElementById('queueModalList');
+
+        if (title) title.textContent = `Fila — ${item.titulo || 'Doação'}`;
+        if (subtitle) subtitle.textContent = `Última atualização: ${formatDateTime(new Date())}`;
+        if (count) {
+            count.textContent = `${fila.length}/${limite || '-'}`;
+            count.className = `fila-badge ${limite && fila.length >= limite ? 'cheio' : 'quase-cheio'}`;
+        }
+        if (image) image.innerHTML = renderItemImage(item, 'queue-image');
+
+        if (!list) return;
+        if (fila.length === 0) {
+            list.innerHTML = '<div class="queue-empty">Ninguém entrou na fila ainda.</div>';
+            return;
+        }
+
+        list.innerHTML = fila.map((pessoa) => `
+            <div class="queue-row ${pessoa.is_me ? 'is-me' : ''}">
+                <span class="queue-position">#${pessoa.posicao}</span>
+                <div class="queue-user">
+                    <strong>${escapeHtml(pessoa.nome || 'Usuário')}</strong>
+                    <small>${pessoa.is_me ? 'Você está nesta posição' : 'Solicitante'}</small>
+                </div>
+                <time class="queue-date" datetime="${escapeHtml(pessoa.datarequisicao || '')}">${formatDateTime(pessoa.datarequisicao)}</time>
+            </div>
+        `).join('');
+    } catch (erro) {
+        console.error('Erro ao carregar fila completa:', erro);
+        if (!silent) showToast('Erro de conexão ao carregar fila', true);
     }
 }
 
@@ -631,14 +856,20 @@ async function verFila(iditem) {
         const actions = document.getElementById('modalActions');
 
         title.innerText = 'Fila de Interessados';
-        desc.innerHTML = fila.length > 0 ? fila.map((f, i) => `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #eee;">
-                <span>#${i+1} ${escapeHtml(f.primeironome)}</span>
+        const modalDonor = document.getElementById('modalDonor');
+        if (modalDonor) modalDonor.textContent = '';
+        desc.innerHTML = fila.length > 0 ? `<div class="queue-list">${fila.map((f, i) => `
+            <div class="queue-row">
+                <span class="queue-position">#${f.posicao || i + 1}</span>
+                <div class="queue-user">
+                    <strong>${escapeHtml(`${f.primeironome || ''} ${f.sobrenome || ''}`.trim() || 'Usuário')}</strong>
+                    <small>Solicitou em ${formatDateTime(f.datarequisicao)}</small>
+                </div>
                 <button class="btn btn-secondary btn-sm" onclick="abrirChat(${f.idusuario})">
                     <i class="fa-solid fa-comments"></i> Chat
                 </button>
             </div>
-        `).join('') : 'Ninguém na fila ainda.';
+        `).join('')}</div>` : '<div class="queue-empty">Ninguém na fila ainda.</div>';
         
         actions.innerHTML = '<button class="btn btn-secondary" onclick="closeModal(\'itemModal\')">Fechar</button>';
         openProfileModal('itemModal');
@@ -968,6 +1199,14 @@ function closeModal(modalId) {
             chatInterval = null;
         }
         destinatarioIdAtual = null;
+    }
+
+    if (modalId === 'queueModal') {
+        if (queueModalInterval) {
+            clearInterval(queueModalInterval);
+            queueModalInterval = null;
+        }
+        queueModalItemId = null;
     }
 }
 

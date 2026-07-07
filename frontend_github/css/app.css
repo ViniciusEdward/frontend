@@ -1094,3 +1094,249 @@
     font-size: 0.82rem;
     font-weight: 700;
 }
+
+/* ============================================================
+   Manutenção visual leve — app interno, sem alterar tokens :root
+   ============================================================ */
+.app-header {
+    box-shadow: 0 1px 0 rgba(26, 26, 26, 0.04), 0 8px 24px rgba(26, 26, 26, 0.03);
+}
+
+.nav-btn,
+.chat-item,
+.activity-filter,
+.item-card,
+.modal-content,
+.profile-menu,
+.chat-layout,
+.queue-row {
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+}
+
+.nav-btn:hover,
+.nav-btn.active {
+    box-shadow: 0 8px 18px rgba(232, 117, 26, 0.08);
+}
+
+.item-card {
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.item-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
+}
+
+.item-card-img,
+.item-card-img-placeholder,
+.details-modal-body .details-image,
+.queue-item-image img {
+    transition: transform 0.24s ease, box-shadow 0.24s ease;
+}
+
+.item-card:hover .item-card-img {
+    transform: scale(1.015);
+}
+
+.modal-content,
+.queue-modal-content,
+.chat-layout,
+.profile-menu,
+.chats-list {
+    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+}
+
+.chat-item:hover,
+.queue-row:hover {
+    transform: translateY(-1px);
+}
+
+.chat-input-area input,
+.support-input-row input {
+    min-height: 46px;
+}
+
+.profile-avatar {
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-btn,
+    .chat-item,
+    .activity-filter,
+    .item-card,
+    .modal-content,
+    .profile-menu,
+    .chat-layout,
+    .queue-row,
+    .item-card-img,
+    .item-card-img-placeholder {
+        transition: none;
+    }
+
+    .item-card:hover,
+    .chat-item:hover,
+    .queue-row:hover,
+    .item-card:hover .item-card-img {
+        transform: none;
+    }
+}
+
+/* ============== Avaliação pós-entrega ============== */
+.avaliacao-modal-content h3 {
+    font-size: 1.45rem;
+    color: var(--secondary);
+    margin-bottom: 0.6rem;
+    padding-right: 2rem;
+}
+
+.avaliacao-descricao {
+    color: var(--text-dark);
+    line-height: 1.55;
+    margin-bottom: 1rem;
+}
+
+.avaliacao-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.avaliacao-form label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-weight: 700;
+    color: var(--secondary);
+}
+
+.avaliacao-form select,
+.avaliacao-form textarea {
+    width: 100%;
+    padding: 0.85rem 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: #fff;
+    color: var(--text-dark);
+    font: inherit;
+}
+
+.avaliacao-form textarea {
+    resize: vertical;
+    min-height: 110px;
+}
+
+.avaliacao-checklist {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: #F8FAFC;
+}
+
+.avaliacao-checklist label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    margin: 0;
+    font-weight: 600;
+    color: var(--text-dark);
+    line-height: 1.35;
+}
+
+.avaliacao-checklist input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    margin-top: 0.05rem;
+    accent-color: var(--primary);
+}
+
+.avaliacao-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(46, 204, 113, 0.12);
+    color: #1E8449;
+    font-size: 0.84rem;
+    font-weight: 800;
+}
+
+/* ============== Ajustes de beneficiário e foto de feedback ============== */
+.beneficiario-info {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: #F8FAFC;
+    color: var(--text-dark);
+    font-size: 0.86rem;
+}
+
+.beneficiario-info > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.beneficiario-info strong {
+    color: var(--secondary);
+}
+
+.beneficiario-info .btn {
+    width: fit-content;
+    max-width: 100%;
+}
+
+.avaliacao-image-upload {
+    padding: 0.85rem;
+}
+
+.avaliacao-imagem-wrap .image-preview img {
+    max-height: 220px;
+    object-fit: contain;
+    background: #fff;
+}
+
+.avaliacao-status.pendente {
+    background: rgba(240, 122, 0, 0.12);
+    color: #B45309;
+}
+
+@media (max-width: 600px) {
+    .beneficiario-info .btn {
+        width: 100%;
+    }
+}
+
+
+.chat-empty-state {
+    padding: 1.25rem;
+    text-align: center;
+    color: var(--text-muted);
+    background: #F8FAFC;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.chat-empty-state i {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+    font-size: 1.35rem;
+}
+
+.chat-empty-state p {
+    margin: 0 0 0.3rem;
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+.chat-empty-state small {
+    color: var(--text-muted);
+}

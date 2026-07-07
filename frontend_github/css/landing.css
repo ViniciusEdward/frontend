@@ -1,4 +1,4 @@
-﻿/* Doefacil Landing Page — Modern Design */
+/* Doefacil Landing Page — Modern Design */
 
 :root {
     --primary: #E8751A;
@@ -788,5 +788,46 @@ section[id] {
     }
 }
 
+/* ============================================================
+   Manutenção visual leve — landing, sem alterar tokens :root
+   ============================================================ */
+.landing-header {
+    box-shadow: 0 1px 0 rgba(26, 26, 26, 0.04);
+}
 
+.nav-links a,
+.footer-links a,
+.hero-buttons .btn,
+.btn-login,
+.btn-cta,
+.btn-secondary {
+    transition: transform 0.22s ease, box-shadow 0.22s ease, color 0.22s ease, background 0.22s ease;
+}
 
+.hero-badge,
+.mockup-card,
+.step-card,
+.benefit-card,
+.impact-card {
+    border: 1px solid rgba(26, 26, 26, 0.07);
+    box-shadow: 0 12px 30px rgba(26, 26, 26, 0.06);
+}
+
+.mockup-item,
+.step-card,
+.benefit-card {
+    transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+.mockup-item:hover,
+.step-card:hover,
+.benefit-card:hover {
+    border-color: rgba(232, 117, 26, 0.22);
+}
+
+.hero-buttons .btn:hover,
+.btn-login:hover,
+.btn-cta:hover,
+.btn-secondary:hover {
+    transform: translateY(-2px);
+}

@@ -1,5 +1,5 @@
-// URL do backend — produção aponta para o Render, dev para localhost:3001
-const API_BASE_URL = (() => {
+// URL do backend — usa config.js quando disponível.
+const API_BASE_URL = window.API_BASE_URL || (() => {
     const h = window.location.hostname;
     if (h === 'localhost' || h === '127.0.0.1') {
         return window.location.protocol + '//' + h + ':3001/api';
@@ -15,10 +15,16 @@ let chatInterval = null;
 let destinatarioIdAtual = null;
 let itemBeingEdited = null;
 let selectedItemImageDataUrl = '';
+let selectedAvaliacaoImageDataUrl = '';
+const requestingItems = new Set();
 let queueModalInterval = null;
 let queueModalItemId = null;
 let map = null;
 let userLocation = { latitude: -12.97, longitude: -38.50 };
+const TIPO_AVALIACAO = {
+    DOADOR_AVALIA_BENEFICIARIO: 'doador_avalia_beneficiario',
+    BENEFICIARIO_AVALIA_DOADOR_ITEM: 'beneficiario_avalia_doador_item'
+};
 
 // ============= AUTENTICAÇÃO =============
 function checkAuth() {
@@ -88,7 +94,7 @@ function isValidImageSrc(src) {
     const value = src.trim();
     if (!value) return false;
     if (/^data:image\/(jpeg|jpg|png|webp);base64,[a-z0-9+/=\s]+$/i.test(value)) return true;
-    if (/^\/uploads\/items\/[a-z0-9._-]+\.(jpe?g|png|webp)$/i.test(value)) return true;
+    if (/^\/uploads\/(items|feedback)\/[a-z0-9._-]+\.(jpe?g|png|webp)$/i.test(value)) return true;
     try {
         const parsed = new URL(value, window.location.origin);
         return ['http:', 'https:'].includes(parsed.protocol) && !/[<>"'`]/.test(value);
@@ -108,11 +114,15 @@ function renderItemImage(item, extraClass = '') {
     if (!src) {
         return `<div class="item-card-img-placeholder ${extraClass}"><i class="fa-solid fa-box-open"></i></div>`;
     }
-    return `<img class="item-card-img ${extraClass}" src="${escapeHtml(src)}" alt="${title}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-card-img-placeholder ${extraClass}',innerHTML:'<i class=&quot;fa-solid fa-box-open&quot;></i>'}))">`;
+    return `<img class="item-card-img ${extraClass}" src="${escapeHtml(src)}" alt="${title}" loading="lazy">`;
 }
 
 function safeInlineString(value) {
     return JSON.stringify(String(value || '')).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttr(value) {
+    return escapeHtml(String(value || '')).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function formatDateTime(value) {
@@ -216,6 +226,98 @@ function inicializarUploadImagemDoacao() {
 }
 
 // ============= INICIALIZAÇÃO =============
+
+function limparImagemAvaliacao() {
+    selectedAvaliacaoImageDataUrl = '';
+    const input = document.getElementById('avaliacaoImagemFile');
+    const preview = document.getElementById('avaliacaoImagemPreview');
+    const img = document.getElementById('avaliacaoImagemPreviewImg');
+    const name = document.getElementById('avaliacaoImagemFileName');
+    if (input) input.value = '';
+    if (img) img.src = '';
+    if (name) name.textContent = '';
+    if (preview) preview.style.display = 'none';
+}
+
+function carregarImagemAvaliacao(file) {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!file) {
+        limparImagemAvaliacao();
+        return;
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+        showToast('Use uma imagem JPG, PNG ou WebP.', true);
+        limparImagemAvaliacao();
+        return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('A imagem de feedback deve ter no máximo 5 MB.', true);
+        limparImagemAvaliacao();
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        const dataUrl = String(reader.result || '');
+        if (!/^data:image\/(jpeg|jpg|png|webp);base64,[a-z0-9+/=\s]+$/i.test(dataUrl)) {
+            showToast('Imagem inválida ou corrompida.', true);
+            limparImagemAvaliacao();
+            return;
+        }
+        selectedAvaliacaoImageDataUrl = dataUrl;
+        const preview = document.getElementById('avaliacaoImagemPreview');
+        const img = document.getElementById('avaliacaoImagemPreviewImg');
+        const name = document.getElementById('avaliacaoImagemFileName');
+        if (img) img.src = dataUrl;
+        if (name) name.textContent = file.name;
+        if (preview) preview.style.display = 'flex';
+    };
+    reader.onerror = () => {
+        showToast('Não foi possível ler a imagem selecionada.', true);
+        limparImagemAvaliacao();
+    };
+    reader.readAsDataURL(file);
+}
+
+function inicializarUploadImagemAvaliacao() {
+    const fileInput = document.getElementById('avaliacaoImagemFile');
+    const chooseBtn = document.getElementById('avaliacaoImagemChooseBtn');
+    const changeBtn = document.getElementById('avaliacaoImagemChangeBtn');
+    const removeBtn = document.getElementById('avaliacaoImagemRemoveBtn');
+    if (!fileInput) return;
+
+    const openPicker = () => fileInput.click();
+    if (chooseBtn) chooseBtn.addEventListener('click', openPicker);
+    if (changeBtn) changeBtn.addEventListener('click', openPicker);
+    if (removeBtn) removeBtn.addEventListener('click', limparImagemAvaliacao);
+    fileInput.addEventListener('change', () => carregarImagemAvaliacao(fileInput.files?.[0]));
+}
+
+function renderBeneficiarioInfo(item) {
+    const idusuarioBeneficiario = Number(item.idusuario_beneficiario || item.beneficiario_id || item.idusuario_vencedor || 0);
+    const nome = item.beneficiario_nome || item.nome_beneficiario || '';
+    const temFluxoDeEntrega = ['reservada', 'finalizada'].includes(item.status) || ['aceito', 'reservado', 'aguardando_entrega', 'em_processo', 'entregue'].includes(item.entrega_status);
+
+    if (!idusuarioBeneficiario && !nome && !temFluxoDeEntrega) return '';
+
+    const nomeSeguro = nome ? escapeHtml(nome) : 'Beneficiário selecionado';
+    const chat = idusuarioBeneficiario ? `
+        <button class="btn btn-secondary btn-sm" data-action="abrir-chat" data-idusuario="${idusuarioBeneficiario}">
+            <i class="fa-solid fa-comments"></i> Chat com beneficiário
+        </button>` : '';
+
+    return `
+        <div class="beneficiario-info">
+            <div>
+                <strong><i class="fa-solid fa-user-check"></i> Beneficiário:</strong>
+                <span>${nomeSeguro}</span>
+            </div>
+            ${chat}
+        </div>`;
+}
+
 async function obterLocalizacaoAtual() {
     return new Promise((resolve) => {
         if (!navigator.geolocation) {
@@ -242,7 +344,127 @@ async function obterLocalizacaoAtual() {
     });
 }
 
+
+function substituirImagemComErro(img) {
+    if (!img || img.dataset.fallbackApplied === '1') return;
+    img.dataset.fallbackApplied = '1';
+    const placeholder = document.createElement('div');
+    const extraClass = img.className.replace(/\bitem-card-img\b/g, '').trim();
+    placeholder.className = `item-card-img-placeholder ${extraClass}`.trim();
+    placeholder.innerHTML = '<i class="fa-solid fa-box-open"></i>';
+    img.replaceWith(placeholder);
+}
+
+function inicializarEventosSemInline() {
+    document.addEventListener('click', async (event) => {
+        const target = event.target.closest('[data-action], [data-tab], [data-activity], [data-close-modal], [data-modal-target]');
+        if (!target) return;
+
+        if (target.dataset.tab) {
+            navigateTab(target.dataset.tab, target.classList.contains('nav-btn') ? target : null);
+            return;
+        }
+
+        if (target.dataset.activity) {
+            toggleActivity(target.dataset.activity);
+            return;
+        }
+
+        if (target.dataset.closeModal) {
+            closeModal(target.dataset.closeModal);
+            return;
+        }
+
+        if (target.dataset.modalTarget) {
+            openProfileModal(target.dataset.modalTarget);
+            return;
+        }
+
+        const action = target.dataset.action;
+        const iditem = Number(target.dataset.iditem || 0);
+        const idsolicitacao = Number(target.dataset.idsolicitacao || 0);
+        const idusuario = Number(target.dataset.idusuario || 0);
+
+        switch (action) {
+            case 'logout':
+                logout();
+                break;
+            case 'clear-session':
+                localStorage.clear();
+                window.location.href = 'index.html';
+                break;
+            case 'support-send':
+                sendSupportMessage();
+                break;
+            case 'send-chat':
+                sendChatMessage();
+                break;
+            case 'submit-avaliacao':
+                await enviarAvaliacaoExperiencia();
+                break;
+            case 'solicitar-doacao':
+                if (iditem) await solicitarDoacao(iditem);
+                break;
+            case 'abrir-fila-completa':
+                if (iditem) await abrirModalFilaCompleta(iditem);
+                break;
+            case 'confirmar-entrega':
+                if (idsolicitacao) await confirmarEntrega(idsolicitacao);
+                break;
+            case 'abrir-chat':
+                if (idusuario) abrirChat(idusuario);
+                break;
+            case 'abrir-avaliacao':
+                if (idsolicitacao) abrirAvaliacaoExperiencia({
+                    idsolicitacao,
+                    iditem,
+                    idusuarioAvaliado: Number(target.dataset.idusuarioAvaliado || target.dataset.idusuarioDoador || 0),
+                    nomeAvaliado: target.dataset.nomeAvaliado || target.dataset.nomeDoador || '',
+                    tipo: target.dataset.tipoAvaliacao || '',
+                    tituloItem: target.dataset.tituloItem || ''
+                });
+                break;
+            case 'cancelar-solicitacao':
+                if (idsolicitacao) await cancelarSolicitacao(idsolicitacao);
+                break;
+            case 'abrir-detalhes-doacao':
+                if (iditem) await abrirDetalhesDoacao(iditem);
+                break;
+            case 'ver-fila':
+                if (iditem) await verFila(iditem);
+                break;
+            case 'finalizar-doacao':
+                if (iditem) await finalizarDoacaoAntecipada(iditem);
+                break;
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        if (event.target?.id === 'supportInput') {
+            event.preventDefault();
+            sendSupportMessage();
+        }
+        if (event.target?.id === 'chatInput') {
+            event.preventDefault();
+            sendChatMessage();
+        }
+        if (event.target?.classList?.contains('chat-item') || event.target?.classList?.contains('user-badge')) {
+            event.preventDefault();
+            event.target.click();
+        }
+    });
+
+    window.addEventListener('error', (event) => {
+        const img = event.target;
+        if (img instanceof HTMLImageElement && img.classList.contains('item-card-img')) {
+            substituirImagemComErro(img);
+        }
+    }, true);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+    inicializarEventosSemInline();
     updateUserHeader();
     const editProfileForm = document.getElementById('editProfileForm');
     if (editProfileForm) {
@@ -261,6 +483,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     inicializarUploadImagemDoacao();
+    inicializarUploadImagemAvaliacao();
 
     inicializarSupport();
     await obterLocalizacaoAtual();
@@ -367,6 +590,18 @@ async function carregarItensDoBanco() {
                 ? `<p class="dias-restantes ${item.dias_restantes <= 3 ? 'urgente' : ''}">⏰ ${item.dias_restantes} dias restantes para seleção</p>`
                 : '';
             const isFilaCheia = item.total_na_fila >= limite;
+            const minhaSolicitacao = String(item.minha_solicitacao_status || '').toLowerCase();
+            const jaSolicitado = minhaSolicitacao && minhaSolicitacao !== 'cancelado';
+            const isMeuItem = currentUser && Number(item.usuario_idusuario) === Number(currentUser.idusuario);
+            const botaoSolicitarDesabilitado = isFilaCheia || jaSolicitado || isMeuItem;
+            const textoBotaoSolicitar = isMeuItem
+                ? 'Sua doação'
+                : jaSolicitado
+                    ? 'Já solicitado'
+                    : isFilaCheia
+                        ? 'Fila cheia'
+                        : 'Solicitar';
+            const botaoClass = jaSolicitado || isMeuItem ? 'btn btn-secondary' : 'btn btn-primary';
 
             const imgHtml = renderItemImage(item);
 
@@ -384,11 +619,11 @@ async function carregarItensDoBanco() {
                         </p>
                         ${diasText}
                         <div class="item-card-actions">
-                            <button class="btn btn-primary" onclick="solicitarDoacao(${item.iditem})" ${isFilaCheia ? 'disabled' : ''}>
+                            <button class="${botaoClass}" data-action="solicitar-doacao" data-iditem="${item.iditem}" ${botaoSolicitarDesabilitado ? 'disabled' : ''}>
                                 <i class="fa-solid fa-hand-holding-heart"></i>
-                                ${isFilaCheia ? 'Fila cheia' : 'Solicitar'}
+                                ${textoBotaoSolicitar}
                             </button>
-                            <button class="btn btn-secondary btn-sm" onclick="abrirModalFilaCompleta(${item.iditem})">
+                            <button class="btn btn-secondary btn-sm" data-action="abrir-fila-completa" data-iditem="${item.iditem}">
                                 <i class="fa-solid fa-eye"></i>
                             </button>
                         </div>
@@ -405,28 +640,64 @@ async function carregarItensDoBanco() {
 }
 
 async function solicitarDoacao(iditem) {
+    const itemId = Number(iditem);
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+        showToast('ID do item inválido', true);
+        return;
+    }
+
+    if (requestingItems.has(itemId)) return;
+    requestingItems.add(itemId);
+
+    const btn = document.querySelector(`[data-action="solicitar-doacao"][data-iditem="${itemId}"]`);
+    const originalHtml = btn ? btn.innerHTML : '';
+    const originalDisabled = btn ? btn.disabled : false;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Solicitando...';
+    }
+
     try {
         const res = await fetchAPI('/solicita', {
             method: 'POST',
-            body: JSON.stringify({ iditem })
+            body: JSON.stringify({ iditem: itemId, item_iditem: itemId })
         });
 
-        const dados = await res.json();
-        
+        let dados = {};
+        try {
+            dados = await res.json();
+        } catch (parseError) {
+            dados = {};
+        }
+
         if (res.ok) {
-            const filaInfo = await buscarPosicaoNaFila(iditem);
-            if (filaInfo && filaInfo.posicao) {
+            const filaInfo = await buscarPosicaoNaFila(itemId);
+            if (dados.jaSolicitado) {
+                showToast('Você já está na fila deste item.');
+            } else if (filaInfo && filaInfo.posicao) {
                 showToast(`✅ Você está na posição #${filaInfo.posicao} da fila! Seleção automática em ${filaInfo.dias_restantes} dias.`);
             } else {
                 showToast('Doação solicitada com sucesso!');
             }
-            carregarItensDoBanco();
+            await carregarItensDoBanco();
         } else {
-            showToast(dados.erro || 'Erro ao solicitar', true);
+            const mensagem = dados.erro || dados.mensagem || `Erro ao solicitar (${res.status})`;
+            showToast(mensagem, true);
+            if (btn) {
+                btn.disabled = originalDisabled;
+                btn.innerHTML = originalHtml;
+            }
         }
     } catch (erro) {
         console.error('Erro:', erro);
         showToast('Erro de conexão', true);
+        if (btn) {
+            btn.disabled = originalDisabled;
+            btn.innerHTML = originalHtml;
+        }
+    } finally {
+        requestingItems.delete(itemId);
     }
 }
 
@@ -502,6 +773,7 @@ function formatStatus(status) {
     const map = {
         'pendente': 'Na Fila',
         'aceito': 'Aguardando Entrega',
+        'reservado': 'Aguardando Entrega',
         'aguardando_entrega': 'Aguardando Entrega',
         'em_processo': 'Em Processo de Entrega',
         'entregue': 'Entregue',
@@ -511,6 +783,50 @@ function formatStatus(status) {
         'finalizada': 'Finalizada'
     };
     return map[status] || status;
+}
+
+function booleanFromApi(value) {
+    return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+function renderAvaliacaoEnviada() {
+    return '<span class="avaliacao-status"><i class="fa-solid fa-circle-check"></i> Avaliação enviada</span>';
+}
+
+function renderAvaliacaoBeneficiarioButton(item) {
+    if (booleanFromApi(item.avaliacao_enviada)) return renderAvaliacaoEnviada();
+    if (!item.id || !item.idusuario_doador) return '';
+    return `
+        <button class="btn btn-secondary" data-action="abrir-avaliacao"
+            data-tipo-avaliacao="${TIPO_AVALIACAO.BENEFICIARIO_AVALIA_DOADOR_ITEM}"
+            data-idsolicitacao="${Number(item.id)}"
+            data-iditem="${Number(item.iditem || 0)}"
+            data-idusuario-avaliado="${Number(item.idusuario_doador)}"
+            data-nome-avaliado="${escapeAttr(item.primeironome || 'doador')}"
+            data-titulo-item="${escapeAttr(item.titulo || '')}">
+            <i class="fa-solid fa-star"></i> Avaliar item e doador
+        </button>`;
+}
+
+function renderAvaliacaoDoadorButton(item) {
+    const idsolicitacao = Number(item.idsolicitacao || item.idsolicitacao_aceita || 0);
+    const idusuarioBeneficiario = Number(item.idusuario_beneficiario || item.beneficiario_id || item.idusuario_vencedor || 0);
+    const entregaFinalizada = item.entrega_status === 'entregue' || item.status === 'finalizada' || item.status === 'entregue';
+    if (!entregaFinalizada) return '';
+    if (booleanFromApi(item.avaliacao_enviada)) return renderAvaliacaoEnviada();
+    if (!idsolicitacao || !idusuarioBeneficiario) {
+        return '<span class="avaliacao-status pendente"><i class="fa-solid fa-circle-exclamation"></i> Beneficiário não identificado para avaliação</span>';
+    }
+    return `
+        <button class="btn btn-secondary btn-sm" data-action="abrir-avaliacao"
+            data-tipo-avaliacao="${TIPO_AVALIACAO.DOADOR_AVALIA_BENEFICIARIO}"
+            data-idsolicitacao="${idsolicitacao}"
+            data-iditem="${Number(item.iditem || 0)}"
+            data-idusuario-avaliado="${idusuarioBeneficiario}"
+            data-nome-avaliado="${escapeAttr(item.beneficiario_nome || 'beneficiário')}"
+            data-titulo-item="${escapeAttr(item.titulo || '')}">
+            <i class="fa-solid fa-star"></i> Avaliar beneficiário
+        </button>`;
 }
 
 async function carregarAtividades() {
@@ -526,11 +842,9 @@ async function carregarAtividades() {
         const fila = document.getElementById('listaFila');
         const doacoes = document.getElementById('listaDoacoes');
 
-        if (!fila || !doacoes) {
-            return;
-        }
+        if (!fila || !doacoes) return;
 
-        const solicitacoes = atividades.filter(item => item.tipo === 'solicitacao' || item.tipo === 'entrega');
+        const solicitacoes = atividades.filter(item => item.tipo === 'solicitacao');
         const criacoes = atividades.filter(item => item.tipo === 'doacao');
 
         const solicitacoesComFila = await Promise.all(solicitacoes.map(async item => {
@@ -552,32 +866,26 @@ async function carregarAtividades() {
                 <div class="item-card">
                     ${imgHtml}
                     <div class="item-card-body">
-                    <h4>${escapeHtml(item.titulo)}</h4>
-                    <p>${escapeHtml(item.descricao || '')}</p>
-                    <p style="font-size: 0.9rem; color: var(--text-muted);">Doador: ${escapeHtml(item.primeironome || 'Usuário')}</p>
-                    <p style="margin-top: 5px;">
-                        <span class="${statusClass}">${formatStatus(item.status)}</span>
-                    </p>
-                    ${item.filaData ? `<p class="posicao-fila">📍 Sua posição: #${item.filaData.posicao} de ${item.filaData.total}</p>` : ''}
-                    ${item.filaData && item.filaData.dias_restantes !== undefined ? `<p class="dias-restantes${item.filaData.dias_restantes <= 3 ? ' urgente' : ''}">⏰ Seleção automática em ${item.filaData.dias_restantes} dias</p>` : ''}
-                    
-                    <div class="item-card-actions">
-                        ${item.status === 'aguardando_entrega' || item.status === 'aceito' ? `
-                            <button class="btn btn-primary" onclick="confirmarEntrega(${item.id})">
-                                <i class="fa-solid fa-check-circle"></i> Confirmar Recebimento
-                            </button>
-                            <button class="btn btn-secondary" onclick="abrirChat(${item.idusuario_doador})">
-                                <i class="fa-solid fa-comments"></i> Combinar Entrega
-                            </button>` : ''}
-                        ${item.status === 'entregue' ? `
-                            <button class="btn btn-secondary" onclick="abrirAvaliacao(${item.id}, ${item.idusuario_doador}, ${safeInlineString(item.primeironome || '')})">
-                                <i class="fa-solid fa-star"></i> Avaliar Doador
-                            </button>` : ''}
-                        ${item.status === 'pendente' ? `
-                            <button class="btn btn-danger btn-sm" onclick="cancelarSolicitacao(${item.id})">
-                                <i class="fa-solid fa-xmark"></i> Cancelar Solicitação
-                            </button>` : ''}
-                    </div>
+                        <h4>${escapeHtml(item.titulo)}</h4>
+                        <p>${escapeHtml(item.descricao || '')}</p>
+                        <p style="font-size: 0.9rem; color: var(--text-muted);">Doador: ${escapeHtml(item.primeironome || 'Usuário')}</p>
+                        <p style="margin-top: 5px;"><span class="${statusClass}">${formatStatus(item.status)}</span></p>
+                        ${item.filaData ? `<p class="posicao-fila">📍 Sua posição: #${item.filaData.posicao} de ${item.filaData.total}</p>` : ''}
+                        ${item.filaData && item.filaData.dias_restantes !== undefined ? `<p class="dias-restantes${item.filaData.dias_restantes <= 3 ? ' urgente' : ''}">⏰ Seleção automática em ${item.filaData.dias_restantes} dias</p>` : ''}
+                        <div class="item-card-actions">
+                            ${item.status === 'aguardando_entrega' || item.status === 'aceito' ? `
+                                <button class="btn btn-primary" data-action="confirmar-entrega" data-idsolicitacao="${item.id}">
+                                    <i class="fa-solid fa-check-circle"></i> Confirmar Recebimento
+                                </button>
+                                <button class="btn btn-secondary" data-action="abrir-chat" data-idusuario="${item.idusuario_doador}">
+                                    <i class="fa-solid fa-comments"></i> Combinar Entrega
+                                </button>` : ''}
+                            ${item.status === 'entregue' ? renderAvaliacaoBeneficiarioButton(item) : ''}
+                            ${item.status === 'pendente' ? `
+                                <button class="btn btn-danger btn-sm" data-action="cancelar-solicitacao" data-idsolicitacao="${item.id}">
+                                    <i class="fa-solid fa-xmark"></i> Cancelar Solicitação
+                                </button>` : ''}
+                        </div>
                     </div>
                 </div>
             `;
@@ -585,18 +893,22 @@ async function carregarAtividades() {
 
         doacoes.innerHTML = criacoes.length > 0 ? criacoes.map(item => {
             const imgHtml = renderItemImage(item);
+            const beneficiarioHtml = renderBeneficiarioInfo(item);
             return `
-            <div class="item-card">
-                ${imgHtml}
-                <div class="item-card-body">
-                    <h4 style="font-size:1rem; color:var(--secondary);">${escapeHtml(item.titulo)}</h4>
-                    <p>${escapeHtml(item.descricao || '')}</p>
-                    <p style="font-size: 0.82rem; color: var(--text-muted);">📅 ${new Date(item.data).toLocaleDateString('pt-BR')}</p>
-                    <div class="item-card-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="abrirDetalhesDoacao(${item.iditem})">Ver Detalhes</button>
+                <div class="item-card">
+                    ${imgHtml}
+                    <div class="item-card-body">
+                        <h4 style="font-size:1rem; color:var(--secondary);">${escapeHtml(item.titulo)}</h4>
+                        <p>${escapeHtml(item.descricao || '')}</p>
+                        <p style="font-size: 0.82rem; color: var(--text-muted);">📅 ${new Date(item.data).toLocaleDateString('pt-BR')}</p>
+                        <p style="font-size: 0.82rem; color: var(--text-muted);">Status: ${escapeHtml(formatStatus(item.status || 'disponivel'))}</p>
+                        ${beneficiarioHtml}
+                        <div class="item-card-actions">
+                            <button class="btn btn-secondary btn-sm" data-action="abrir-detalhes-doacao" data-iditem="${item.iditem}">Ver Detalhes</button>
+                            ${renderAvaliacaoDoadorButton(item)}
+                        </div>
                     </div>
-                </div>
-            </div>`;
+                </div>`;
         }).join('') : '<p style="padding: 1rem; color: var(--text-muted);">Você ainda não publicou doações.</p>';
     } catch (erro) {
         console.error('Erro:', erro);
@@ -621,50 +933,104 @@ async function sendChatMessage() {
     await enviarMensagem();
 }
 
-async function abrirAvaliacao(idsolicitacao, idusuarioDoador, nomeDoador) {
+async function abrirAvaliacaoExperiencia({ idsolicitacao, iditem, idusuarioAvaliado, nomeAvaliado, tipo, tituloItem }) {
     const form = document.getElementById('avaliacaoForm');
-    const nomeEl = document.getElementById('avaliacaoDoadorNome');
-    if (form) form.dataset.idsolicitacao = idsolicitacao;
-    if (form) form.dataset.idusuarioDoador = idusuarioDoador;
-    if (nomeEl) nomeEl.textContent = nomeDoador || 'o doador';
-    // Limpar campos anteriores
-    const notaEl = document.getElementById('avaliacaoNota');
-    const comentEl = document.getElementById('avaliacaoComentario');
-    if (notaEl) notaEl.value = '';
-    if (comentEl) comentEl.value = '';
+    const tituloEl = document.getElementById('avaliacaoTitulo');
+    const descEl = document.getElementById('avaliacaoDescricao');
+    const itemWrap = document.getElementById('avaliacaoItemConformeWrap');
+    const imagemWrap = document.getElementById('avaliacaoImagemWrap');
+    if (!form || !idsolicitacao || !idusuarioAvaliado) {
+        showToast('Não foi possível abrir a avaliação desta doação.', true);
+        return;
+    }
+
+    const tipoResolvido = tipo === TIPO_AVALIACAO.DOADOR_AVALIA_BENEFICIARIO
+        ? TIPO_AVALIACAO.DOADOR_AVALIA_BENEFICIARIO
+        : TIPO_AVALIACAO.BENEFICIARIO_AVALIA_DOADOR_ITEM;
+
+    form.dataset.idsolicitacao = String(idsolicitacao);
+    form.dataset.iditem = String(iditem || '');
+    form.dataset.idusuarioAvaliado = String(idusuarioAvaliado);
+    form.dataset.tipoAvaliacao = tipoResolvido;
+
+    const nome = nomeAvaliado || (tipoResolvido === TIPO_AVALIACAO.DOADOR_AVALIA_BENEFICIARIO ? 'o beneficiário' : 'o doador');
+    if (tituloEl) {
+        tituloEl.textContent = tipoResolvido === TIPO_AVALIACAO.DOADOR_AVALIA_BENEFICIARIO
+            ? 'Avaliar beneficiário'
+            : 'Avaliar item e doador';
+    }
+    if (descEl) {
+        descEl.textContent = tipoResolvido === TIPO_AVALIACAO.DOADOR_AVALIA_BENEFICIARIO
+            ? `Conte como foi a experiência com ${nome}: se encontrou a pessoa, se ocorreu tudo bem e se não teve problemas.`
+            : `Conte como foi a experiência com ${nome}${tituloItem ? ` no item "${tituloItem}"` : ''}: avalie o item, o doador e se a entrega ocorreu sem problemas.`;
+    }
+    const beneficiarioAvalia = tipoResolvido === TIPO_AVALIACAO.BENEFICIARIO_AVALIA_DOADOR_ITEM;
+    if (itemWrap) {
+        itemWrap.style.display = beneficiarioAvalia ? 'flex' : 'none';
+    }
+    if (imagemWrap) {
+        imagemWrap.style.display = beneficiarioAvalia ? 'block' : 'none';
+    }
+    limparImagemAvaliacao();
+
+    ['avaliacaoNota', 'avaliacaoComentario'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    ['avaliacaoOcorreuBem', 'avaliacaoEncontrouPessoa', 'avaliacaoItemConforme', 'avaliacaoSemProblemas'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = false;
+    });
+
     openProfileModal('avaliacaoModal');
 }
 
-async function avaliarDoador(idsolicitacao) {
+async function enviarAvaliacaoExperiencia() {
     const form = document.getElementById('avaliacaoForm');
     const notaEl = document.getElementById('avaliacaoNota');
     const comentEl = document.getElementById('avaliacaoComentario');
-    const idusuarioDoador = form?.dataset.idusuarioDoador;
 
-    const nota = parseInt(notaEl?.value);
+    const nota = parseInt(notaEl?.value, 10);
     if (!nota || nota < 1 || nota > 5) {
         showToast('Selecione uma nota de 1 a 5', true);
         return;
     }
 
-    const comentario = comentEl?.value?.trim() || '';
+    const payload = {
+        idsolicitacao: Number(form?.dataset.idsolicitacao || 0),
+        iditem: Number(form?.dataset.iditem || 0) || undefined,
+        idusuario_avaliado: Number(form?.dataset.idusuarioAvaliado || 0),
+        tipo_avaliacao: form?.dataset.tipoAvaliacao || TIPO_AVALIACAO.BENEFICIARIO_AVALIA_DOADOR_ITEM,
+        avaliacao: nota,
+        comentario: comentEl?.value?.trim() || '',
+        ocorreu_tudo_bem: Boolean(document.getElementById('avaliacaoOcorreuBem')?.checked),
+        encontrou_pessoa: Boolean(document.getElementById('avaliacaoEncontrouPessoa')?.checked),
+        item_conforme: Boolean(document.getElementById('avaliacaoItemConforme')?.checked),
+        sem_problemas: Boolean(document.getElementById('avaliacaoSemProblemas')?.checked)
+    };
+
+    if (payload.tipo_avaliacao === TIPO_AVALIACAO.BENEFICIARIO_AVALIA_DOADOR_ITEM && selectedAvaliacaoImageDataUrl) {
+        payload.imagem_feedback_url = selectedAvaliacaoImageDataUrl;
+    }
+
+    if (!payload.idsolicitacao || !payload.idusuario_avaliado) {
+        showToast('Dados da avaliação incompletos.', true);
+        return;
+    }
 
     try {
         const res = await fetchAPI('/avaliacao', {
             method: 'POST',
-            body: JSON.stringify({
-                idusuario_avaliado: parseInt(idusuarioDoador),
-                avaliacao: nota,
-                comentario
-            })
+            body: JSON.stringify(payload)
         });
 
+        const dados = await res.json();
         if (res.ok) {
             showToast('Avaliação enviada com sucesso!');
             closeModal('avaliacaoModal');
             carregarAtividades();
+            carregarMinhasDoacoes();
         } else {
-            const dados = await res.json();
             showToast(dados.erro || 'Erro ao enviar avaliação', true);
         }
     } catch (erro) {
@@ -684,6 +1050,21 @@ async function confirmarEntrega(idsolicitacao) {
         if (res.ok) {
             showToast('Entrega confirmada com sucesso!');
             carregarAtividades();
+            carregarMinhasDoacoes();
+            const tipoAvaliacao = dados.papel_usuario === 'doador'
+                ? TIPO_AVALIACAO.DOADOR_AVALIA_BENEFICIARIO
+                : TIPO_AVALIACAO.BENEFICIARIO_AVALIA_DOADOR_ITEM;
+            const idusuarioAvaliado = dados.papel_usuario === 'doador'
+                ? dados.idusuario_beneficiario
+                : dados.idusuario_doador;
+            if (idusuarioAvaliado) {
+                abrirAvaliacaoExperiencia({
+                    idsolicitacao: dados.idsolicitacao || idsolicitacao,
+                    iditem: dados.iditem,
+                    idusuarioAvaliado,
+                    tipo: tipoAvaliacao
+                });
+            }
         } else {
             showToast(dados.erro || 'Erro ao confirmar entrega', true);
         }
@@ -712,6 +1093,7 @@ async function carregarMinhasDoacoes() {
         list.innerHTML = itens.map(item => {
             const limite = item.limite_fila || 10;
             const imgHtml = renderItemImage(item);
+            const beneficiarioHtml = renderBeneficiarioInfo(item);
             return `
                 <div class="item-card">
                     ${imgHtml}
@@ -721,16 +1103,19 @@ async function carregarMinhasDoacoes() {
                         <p style="font-size:0.82rem;color:var(--text-muted);">
                             Fila: ${item.total_na_fila || 0}/${limite}
                         </p>
+                        <p style="font-size:0.82rem;color:var(--text-muted);">Status: ${escapeHtml(formatStatus(item.status || 'disponivel'))}</p>
+                        ${beneficiarioHtml}
                         <div class="item-card-actions">
-                            <button class="btn btn-secondary btn-sm" onclick="abrirDetalhesDoacao(${item.iditem})">
+                            <button class="btn btn-secondary btn-sm" data-action="abrir-detalhes-doacao" data-iditem="${item.iditem}">
                                 <i class="fa-solid fa-circle-info"></i> Detalhes
                             </button>
-                            <button class="btn btn-secondary btn-sm" onclick="verFila(${item.iditem})">
+                            <button class="btn btn-secondary btn-sm" data-action="ver-fila" data-iditem="${item.iditem}">
                                 <i class="fa-solid fa-users"></i> Fila
                             </button>
-                            <button class="btn btn-primary btn-sm" onclick="finalizarDoacaoAntecipada(${item.iditem})">
+                            ${item.status !== 'finalizada' ? `<button class="btn btn-primary btn-sm" data-action="finalizar-doacao" data-iditem="${item.iditem}">
                                 <i class="fa-solid fa-flag-checkered"></i> Finalizar
-                            </button>
+                            </button>` : ''}
+                            ${renderAvaliacaoDoadorButton(item)}
                         </div>
                     </div>
                 </div>
@@ -771,7 +1156,7 @@ async function abrirDetalhesDoacao(iditem) {
                 </div>
             </div>
         `;
-        actions.innerHTML = '<button class="btn btn-secondary" onclick="closeModal(\'itemModal\')">Fechar</button>';
+        actions.innerHTML = '<button class="btn btn-secondary" data-close-modal="itemModal">Fechar</button>';
         openProfileModal('itemModal');
     } catch (erro) {
         console.error('Erro ao abrir detalhes:', erro);
@@ -792,15 +1177,45 @@ async function abrirModalFilaCompleta(iditem) {
     }, 5000);
 }
 
+async function carregarDadosFilaCompleta(iditem) {
+    const res = await fetchAPI(`/itens/${iditem}/fila-completa`);
+    if (res && res.ok) {
+        return await res.json();
+    }
+
+    // Compatibilidade com backends antigos ainda não atualizados no Render.
+    // O modal completo funciona totalmente após publicar o backend novo.
+    if (res && res.status === 404) {
+        const fallback = await fetchAPI(`/itens/${iditem}/fila-detalhada`);
+        if (fallback && fallback.ok) {
+            const filaAntiga = await fallback.json();
+            const itemAtual = currentItems.find((item) => Number(item.iditem) === Number(iditem)) || {};
+            return {
+                item: itemAtual,
+                total: Array.isArray(filaAntiga) ? filaAntiga.length : 0,
+                fallback: true,
+                fila: Array.isArray(filaAntiga) ? filaAntiga.map((pessoa, index) => ({
+                    posicao: pessoa.posicao || index + 1,
+                    nome: `${pessoa.primeironome || ''} ${pessoa.sobrenome || ''}`.trim() || pessoa.nome || 'Usuário',
+                    datarequisicao: pessoa.datarequisicao,
+                    status: pessoa.status,
+                    is_me: Number(pessoa.idusuario) === Number(currentUser?.idusuario)
+                })) : []
+            };
+        }
+    }
+
+    return null;
+}
+
 async function carregarFilaCompletaModal(iditem, silent = false) {
     try {
-        const res = await fetchAPI(`/itens/${iditem}/fila-completa`);
-        if (!res || !res.ok) {
-            if (!silent) showToast('Erro ao carregar a fila completa', true);
+        const dados = await carregarDadosFilaCompleta(iditem);
+        if (!dados) {
+            if (!silent) showToast('Erro ao carregar a fila completa. Atualize o backend no Render ou rode o backend local.', true);
             return;
         }
 
-        const dados = await res.json();
         const item = dados.item || {};
         const fila = Array.isArray(dados.fila) ? dados.fila : [];
         const limite = item.limite_fila || dados.limite_fila || 0;
@@ -812,7 +1227,7 @@ async function carregarFilaCompletaModal(iditem, silent = false) {
         const list = document.getElementById('queueModalList');
 
         if (title) title.textContent = `Fila — ${item.titulo || 'Doação'}`;
-        if (subtitle) subtitle.textContent = `Última atualização: ${formatDateTime(new Date())}`;
+        if (subtitle) subtitle.textContent = dados.fallback ? `Compatibilidade: backend antigo em uso • ${formatDateTime(new Date())}` : `Última atualização: ${formatDateTime(new Date())}`;
         if (count) {
             count.textContent = `${fila.length}/${limite || '-'}`;
             count.className = `fila-badge ${limite && fila.length >= limite ? 'cheio' : 'quase-cheio'}`;
@@ -865,13 +1280,13 @@ async function verFila(iditem) {
                     <strong>${escapeHtml(`${f.primeironome || ''} ${f.sobrenome || ''}`.trim() || 'Usuário')}</strong>
                     <small>Solicitou em ${formatDateTime(f.datarequisicao)}</small>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="abrirChat(${f.idusuario})">
+                <button class="btn btn-secondary btn-sm" data-action="abrir-chat" data-idusuario="${f.idusuario}">
                     <i class="fa-solid fa-comments"></i> Chat
                 </button>
             </div>
         `).join('')}</div>` : '<div class="queue-empty">Ninguém na fila ainda.</div>';
         
-        actions.innerHTML = '<button class="btn btn-secondary" onclick="closeModal(\'itemModal\')">Fechar</button>';
+        actions.innerHTML = '<button class="btn btn-secondary" data-close-modal="itemModal">Fechar</button>';
         openProfileModal('itemModal');
     } catch (erro) {
         console.error(erro);
@@ -883,11 +1298,20 @@ async function finalizarDoacaoAntecipada(iditem) {
     
     try {
         const res = await fetchAPI(`/itens/${iditem}/finalizar`, { method: 'POST' });
+        const dados = await res.json();
         if (res.ok) {
-            showToast('Doação finalizada com sucesso!');
+            showToast(dados.status === 'finalizada' ? 'Doação finalizada com sucesso!' : 'Beneficiário selecionado. Combine a entrega pelo chat.');
             carregarMinhasDoacoes();
+            carregarAtividades();
+            if (dados.status === 'finalizada' && dados.idusuario_beneficiario) {
+                abrirAvaliacaoExperiencia({
+                    idsolicitacao: dados.idsolicitacao,
+                    iditem: dados.iditem || iditem,
+                    idusuarioAvaliado: dados.idusuario_beneficiario,
+                    tipo: TIPO_AVALIACAO.DOADOR_AVALIA_BENEFICIARIO
+                });
+            }
         } else {
-            const dados = await res.json();
             showToast(dados.erro || 'Erro ao finalizar', true);
         }
     } catch (erro) {
@@ -909,7 +1333,7 @@ async function carregarChats() {
         if (!list) return;
 
         list.innerHTML = chats.map(chat => `
-            <div class="chat-item" onclick="abrirChat(${chat.idusuario_outro})">
+            <div class="chat-item" data-action="abrir-chat" data-idusuario="${chat.idusuario_outro}" role="button" tabindex="0">
                 <h4>${escapeHtml(chat.primeironome)}</h4>
                 <small>${new Date(chat.ultima_mensagem).toLocaleDateString('pt-BR')}</small>
             </div>
@@ -957,20 +1381,36 @@ async function carregarMensagensChat() {
     
     try {
         const res = await fetchAPI(`/chat/${destinatarioIdAtual}`);
-        
+        const container = document.getElementById('chatMessages');
+
         if (!res || !res.ok) {
+            if (res && res.status === 403) {
+                if (chatInterval) {
+                    clearInterval(chatInterval);
+                    chatInterval = null;
+                }
+                destinatarioIdAtual = null;
+                if (container) {
+                    container.innerHTML = `
+                        <div class="chat-empty-state">
+                            <i class="fa-solid fa-lock"></i>
+                            <p>Chat indisponível para estes usuários.</p>
+                            <small>O chat é liberado quando existe uma solicitação relacionada à doação.</small>
+                        </div>`;
+                }
+                showToast('Chat indisponível para estes usuários.', true);
+            }
             return;
         }
 
         const mensagens = await res.json();
-        const container = document.getElementById('chatMessages');
         if (!container) return;
 
         container.innerHTML = mensagens.map(msg => `
             <div class="mensagem ${msg.idusuario_remetente === currentUser.idusuario ? 'enviada' : 'recebida'}">
                 <strong>${escapeHtml(msg.primeironome)}:</strong>
                 <p>${escapeHtml(msg.mensagem)}</p>
-                <small>${new Date(msg.data).toLocaleTimeString('pt-BR')}</small>
+                <small>${msg.data ? new Date(msg.data).toLocaleTimeString('pt-BR') : ''}</small>
             </div>
         `).join('');
 
@@ -1001,7 +1441,14 @@ async function enviarMensagem() {
         if (res.ok) {
             carregarMensagensChat();
         } else {
-            showToast('Erro ao enviar mensagem', true);
+            let dados = {};
+            try { dados = await res.json(); } catch (e) { dados = {}; }
+            const mensagemErro = dados.erro || dados.mensagem || 'Erro ao enviar mensagem';
+            if (res.status === 403 && chatInterval) {
+                clearInterval(chatInterval);
+                chatInterval = null;
+            }
+            showToast(mensagemErro, true);
         }
     } catch (erro) {
         showToast('Erro de conexão', true);

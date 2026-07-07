@@ -1,5 +1,5 @@
-// URL do backend — produção aponta para o Render, dev para localhost:3001
-const API_BASE_URL = (() => {
+// URL do backend — usa config.js quando disponível.
+const API_BASE_URL = window.API_BASE_URL || (() => {
     const h = window.location.hostname;
     if (h === 'localhost' || h === '127.0.0.1') {
         return window.location.protocol + '//' + h + ':3001/api';

@@ -61,8 +61,8 @@
                     <input type="email" id="emailRecuperacao" placeholder="Seu e-mail" autocomplete="email">
                 </div>
                 <div style="display:flex; gap:0.75rem; margin-top:1rem;">
-                    <button class="btn btn-secondary" style="flex:1;" onclick="fecharRecuperarSenha()">Cancelar</button>
-                    <button class="btn btn-primary" style="flex:1;" onclick="solicitarRecuperacao()">
+                    <button type="button" id="btnCancelarRecuperacao1" class="btn btn-secondary" style="flex:1;">Cancelar</button>
+                    <button type="button" id="btnSolicitarRecuperacao" class="btn btn-primary" style="flex:1;">
                         <i class="fa-solid fa-paper-plane"></i> Enviar
                     </button>
                 </div>
@@ -83,8 +83,8 @@
                     <input type="password" id="novaSenhaInput" placeholder="Nova senha (mín. 8 caracteres)" autocomplete="new-password">
                 </div>
                 <div style="display:flex; gap:0.75rem; margin-top:1rem;">
-                    <button class="btn btn-secondary" style="flex:1;" onclick="fecharRecuperarSenha()">Cancelar</button>
-                    <button class="btn btn-primary" style="flex:1;" onclick="confirmarNovaSenha()">
+                    <button type="button" id="btnCancelarRecuperacao2" class="btn btn-secondary" style="flex:1;">Cancelar</button>
+                    <button type="button" id="btnConfirmarNovaSenha" class="btn btn-primary" style="flex:1;">
                         <i class="fa-solid fa-check"></i> Confirmar
                     </button>
                 </div>
@@ -94,81 +94,8 @@
 
     <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
-    <script>
-        // ============= RECUPERAÇÃO DE SENHA =============
-        document.getElementById('btnEsqueceuSenha').addEventListener('click', (e) => {
-            e.preventDefault();
-            document.getElementById('etapa1Recuperar').style.display = 'block';
-            document.getElementById('etapa2Recuperar').style.display = 'none';
-            document.getElementById('emailRecuperacao').value = '';
-            document.getElementById('tokenRecuperacao').value = '';
-            document.getElementById('novaSenhaInput').value = '';
-            document.getElementById('modalRecuperarSenha').style.display = 'flex';
-        });
+    <script src="js/password-recovery.js"></script>
 
-        function fecharRecuperarSenha() {
-            document.getElementById('modalRecuperarSenha').style.display = 'none';
-        }
-
-        async function solicitarRecuperacao() {
-            const email = document.getElementById('emailRecuperacao').value.trim();
-            if (!email || !email.includes('@')) {
-                showToast('Informe um e-mail válido', true);
-                return;
-            }
-            try {
-                const res = await fetch(`${API_BASE_URL}/recuperar-senha`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-                const dados = await res.json();
-                if (res.ok) {
-                    if (dados.token) {
-                        // Modo desenvolvimento: exibir token no console
-                        console.info('[DoeFacil Dev] Token de recuperação:', dados.token);
-                        document.getElementById('tokenRecuperacao').value = dados.token;
-                    }
-                    document.getElementById('etapa1Recuperar').style.display = 'none';
-                    document.getElementById('etapa2Recuperar').style.display = 'block';
-                    showToast('Código gerado! Verifique o console (dev) ou seu e-mail (produção).');
-                } else {
-                    showToast(dados.erro || 'Erro ao solicitar recuperação', true);
-                }
-            } catch (e) {
-                showToast('Erro de conexão', true);
-            }
-        }
-
-        async function confirmarNovaSenha() {
-            const token = document.getElementById('tokenRecuperacao').value.trim();
-            const novaSenha = document.getElementById('novaSenhaInput').value;
-            if (!token) {
-                showToast('Informe o código de recuperação', true);
-                return;
-            }
-            if (!novaSenha || novaSenha.length < 8) {
-                showToast('A nova senha deve ter pelo menos 8 caracteres', true);
-                return;
-            }
-            try {
-                const res = await fetch(`${API_BASE_URL}/resetar-senha`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token, novaSenha })
-                });
-                const dados = await res.json();
-                if (res.ok) {
-                    fecharRecuperarSenha();
-                    showToast('Senha alterada com sucesso! Faça login com a nova senha.');
-                } else {
-                    showToast(dados.erro || 'Código inválido ou expirado', true);
-                }
-            } catch (e) {
-                showToast('Erro de conexão', true);
-            }
-        }
-    </script>
 </body>
 </html>
 

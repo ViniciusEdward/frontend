@@ -89,23 +89,49 @@ async function buscarPosicaoNaFila(iditem) {
 }
 
 
-function isValidImageSrc(src) {
-    if (typeof src !== 'string') return false;
-    const value = src.trim();
-    if (!value) return false;
-    if (/^data:image\/(jpeg|jpg|png|webp);base64,[a-z0-9+/=\s]+$/i.test(value)) return true;
-    if (/^\/uploads\/(items|feedback)\/[a-z0-9._-]+\.(jpe?g|png|webp)$/i.test(value)) return true;
+function getBackendBaseUrl() {
+    return String(API_BASE_URL || '')
+        .replace(/\/api\/?$/i, '')
+        .replace(/\/$/, '');
+}
+
+function buildUploadUrl(pathname) {
+    const backendBaseUrl = getBackendBaseUrl();
+    if (!backendBaseUrl) return '';
+    return `${backendBaseUrl}${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
+}
+
+function isSafeExternalImageUrl(value) {
     try {
-        const parsed = new URL(value, window.location.origin);
+        const parsed = new URL(value);
         return ['http:', 'https:'].includes(parsed.protocol) && !/[<>"'`]/.test(value);
     } catch (erro) {
         return false;
     }
 }
 
-function safeImageSrc(src) {
+function safeImageSrc(src, uploadFolder = 'items') {
     const value = typeof src === 'string' ? src.trim() : '';
-    return isValidImageSrc(value) ? value : '';
+    if (!value) return '';
+
+    if (/^data:image\/(jpeg|jpg|png|webp);base64,[a-z0-9+/=\s]+$/i.test(value)) {
+        return value;
+    }
+
+    if (/^\/uploads\/(items|feedback)\/[a-z0-9._-]+\.(jpe?g|png|webp)$/i.test(value)) {
+        return buildUploadUrl(value);
+    }
+
+    if (/^[a-z0-9._-]+\.(jpe?g|png|webp)$/i.test(value)) {
+        const folder = uploadFolder === 'feedback' ? 'feedback' : 'items';
+        return buildUploadUrl(`/uploads/${folder}/${value}`);
+    }
+
+    if (/^https?:\/\//i.test(value) && isSafeExternalImageUrl(value)) {
+        return value;
+    }
+
+    return '';
 }
 
 function renderItemImage(item, extraClass = '') {

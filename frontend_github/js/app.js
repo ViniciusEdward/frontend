@@ -135,6 +135,20 @@ function safeImageSrc(src, uploadFolder = 'items') {
     return '';
 }
 
+
+function isValidImageSrc(src) {
+    const value = typeof src === 'string' ? src.trim() : '';
+    if (!value) return false;
+
+    // Imagens locais carregadas no formulário via FileReader.
+    if (/^data:image\/(jpeg|jpg|png|webp);base64,[a-z0-9+/=\s]+$/i.test(value)) {
+        return true;
+    }
+
+    // Caminhos/URLs já salvos no backend.
+    return Boolean(safeImageSrc(value));
+}
+
 function renderItemImage(item, extraClass = '') {
     const title = escapeHtml(item?.titulo || 'Item para doação');
     const src = safeImageSrc(item?.imagem_url || item?.imagemUrl || '');

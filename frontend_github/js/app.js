@@ -15,6 +15,7 @@ let chatInterval = null;
 let destinatarioIdAtual = null;
 let itemBeingEdited = null;
 let selectedItemImageDataUrl = '';
+let itemImageMarkedForRemoval = false;
 let selectedAvaliacaoImageDataUrl = '';
 const requestingItems = new Set();
 let queueModalInterval = null;
@@ -176,6 +177,32 @@ function limparImagemSelecionada() {
     if (preview) preview.style.display = 'none';
 }
 
+function resetImagemDoacao() {
+    itemImageMarkedForRemoval = false;
+    limparImagemSelecionada();
+}
+
+function removerImagemDoFormulario() {
+    itemImageMarkedForRemoval = true;
+    limparImagemSelecionada();
+}
+
+function exibirImagemExistenteNoFormulario(imagemUrl) {
+    selectedItemImageDataUrl = '';
+    itemImageMarkedForRemoval = false;
+    const preview = document.getElementById('itemImagePreview');
+    const img = document.getElementById('itemImagePreviewImg');
+    const name = document.getElementById('itemImageFileName');
+    const src = safeImageSrc(imagemUrl || '');
+    if (!src || !preview || !img) {
+        limparImagemSelecionada();
+        return;
+    }
+    img.src = src;
+    if (name) name.textContent = 'Imagem atual da doação';
+    preview.style.display = 'flex';
+}
+
 function carregarImagemSelecionada(file) {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!file) {
@@ -205,6 +232,7 @@ function carregarImagemSelecionada(file) {
         }
 
         selectedItemImageDataUrl = dataUrl;
+        itemImageMarkedForRemoval = false;
         const preview = document.getElementById('itemImagePreview');
         const img = document.getElementById('itemImagePreviewImg');
         const name = document.getElementById('itemImageFileName');
@@ -230,7 +258,7 @@ function inicializarUploadImagemDoacao() {
     const openPicker = () => fileInput.click();
     if (chooseBtn) chooseBtn.addEventListener('click', openPicker);
     if (changeBtn) changeBtn.addEventListener('click', openPicker);
-    if (removeBtn) removeBtn.addEventListener('click', limparImagemSelecionada);
+    if (removeBtn) removeBtn.addEventListener('click', removerImagemDoFormulario);
 
     fileInput.addEventListener('change', () => carregarImagemSelecionada(fileInput.files?.[0]));
 
@@ -452,6 +480,16 @@ function inicializarEventosSemInline() {
                 break;
             case 'cancelar-solicitacao':
                 if (idsolicitacao) await cancelarSolicitacao(idsolicitacao);
+                break;
+            case 'editar-doacao':
+                if (iditem) await abrirEdicaoDoacao(iditem);
+                break;
+            case 'cancelar-doacao':
+                if (iditem) await cancelarDoacao(iditem);
+                break;
+            case 'cancelar-edicao-doacao':
+                resetarFormularioDoacao();
+                navigateTab('myDonationsTab');
                 break;
             case 'abrir-detalhes-doacao':
                 if (iditem) await abrirDetalhesDoacao(iditem);
@@ -748,51 +786,228 @@ async function cancelarSolicitacao(idsolicitacao) {
     }
 }
 
+function getDonationFormPayload() {
+    const titulo = document.getElementById('itemName')?.value.trim();
+    const descricao = document.getElementById('itemDesc')?.value.trim() || '';
+    const limiteFila = parseInt(document.getElementById('queueLimit')?.value, 10) || 10;
+    const prazo_dias = parseInt(document.getElementById('prazo_dias')?.value, 10) || 7;
+    const latitude = parseFloat(document.getElementById('itemLatitude')?.value);
+    const longitude = parseFloat(document.getElementById('itemLongitude')?.value);
+
+    if (!titulo || Number.isNaN(latitude) || Number.isNaN(longitude)) {
+        showToast('Preencha o item e selecione a localização no mapa.', true);
+        return null;
+    }
+
+    const imagem_url = itemImageMarkedForRemoval
+        ? ''
+        : (selectedItemImageDataUrl || itemBeingEdited?.imagem_url || '');
+
+    return {
+        titulo,
+        descricao,
+        limiteFila,
+        prazo_dias,
+        latitude,
+        longitude,
+        imagem_url: imagem_url || undefined
+    };
+}
+
+function atualizarEstadoFormularioDoacao() {
+    const submitBtn = document.getElementById('donationSubmitBtn');
+    const cancelBtn = document.getElementById('cancelDonationEditBtn');
+    const title = document.querySelector('#donateTab .section-header h3');
+
+    if (itemBeingEdited) {
+        if (title) title.textContent = 'Editar Doação';
+        if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar alterações';
+        if (cancelBtn) cancelBtn.style.display = 'inline-flex';
+        return;
+    }
+
+    if (title) title.textContent = 'Criar Doação';
+    if (submitBtn) submitBtn.innerHTML = '<i class="fa-solid fa-upload"></i> Publicar Item';
+    if (cancelBtn) cancelBtn.style.display = 'none';
+}
+
+function resetarFormularioDoacao() {
+    const form = document.getElementById('donateForm');
+    if (form) form.reset();
+    itemBeingEdited = null;
+    resetImagemDoacao();
+    const coords = document.getElementById('coordsDisplay');
+    if (coords) coords.innerText = 'Coordenadas: será preenchido ao clicar';
+    const lat = document.getElementById('itemLatitude');
+    const lon = document.getElementById('itemLongitude');
+    if (lat) lat.value = '';
+    if (lon) lon.value = '';
+
+    const mapElement = document.getElementById('donateMapContainer');
+    const mapaDoacao = mapElement?._leaflet_map;
+    if (mapaDoacao?._marker) {
+        mapaDoacao.removeLayer(mapaDoacao._marker);
+        mapaDoacao._marker = null;
+    }
+    atualizarEstadoFormularioDoacao();
+}
+
+function definirCoordenadasDoacao(lat, lon) {
+    const latitude = Number(lat);
+    const longitude = Number(lon);
+    if (Number.isNaN(latitude) || Number.isNaN(longitude)) return;
+
+    const latInput = document.getElementById('itemLatitude');
+    const lonInput = document.getElementById('itemLongitude');
+    const coords = document.getElementById('coordsDisplay');
+    if (latInput) latInput.value = latitude.toFixed(6);
+    if (lonInput) lonInput.value = longitude.toFixed(6);
+    if (coords) coords.innerText = `📍 ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+
+    const mapElement = document.getElementById('donateMapContainer');
+    const mapaDoacao = mapElement?._leaflet_map;
+    if (mapaDoacao && window.L) {
+        const ponto = [latitude, longitude];
+        mapaDoacao.setView(ponto, 14);
+        if (mapaDoacao._marker) mapaDoacao.removeLayer(mapaDoacao._marker);
+        mapaDoacao._marker = L.marker(ponto).addTo(mapaDoacao).bindPopup('<strong>Local do Item</strong>').openPopup();
+        setTimeout(() => mapaDoacao.invalidateSize(), 150);
+    }
+}
+
+function preencherFormularioEdicaoDoacao(item) {
+    itemBeingEdited = item;
+    document.getElementById('itemName').value = item.titulo || '';
+    document.getElementById('itemDesc').value = item.descricao || '';
+    document.getElementById('queueLimit').value = Number(item.limite_fila || 10);
+    document.getElementById('prazo_dias').value = Number(item.prazo_dias || item.prazoDias || 7);
+    definirCoordenadasDoacao(item.latitude, item.longitude);
+    exibirImagemExistenteNoFormulario(item.imagem_url || item.imagemUrl || '');
+    atualizarEstadoFormularioDoacao();
+}
+
 async function criarDoacao() {
+    if (itemBeingEdited) {
+        await atualizarDoacao(itemBeingEdited.iditem);
+        return;
+    }
+
     try {
-        const titulo = document.getElementById('itemName')?.value.trim();
-        const descricao = document.getElementById('itemDesc')?.value.trim() || '';
-        const limiteFila = parseInt(document.getElementById('queueLimit')?.value) || 10;
-        const prazo_dias = parseInt(document.getElementById('prazo_dias')?.value) || 7;
-        const latitude = parseFloat(document.getElementById('itemLatitude')?.value);
-        const longitude = parseFloat(document.getElementById('itemLongitude')?.value);
-
-        if (!titulo || Number.isNaN(latitude) || Number.isNaN(longitude)) {
-            showToast('Preencha o item e selecione a localização no mapa.', true);
-            return;
-        }
-
-        const imagem_url = selectedItemImageDataUrl || '';
+        const payload = getDonationFormPayload();
+        if (!payload) return;
 
         const res = await fetchAPI('/itens', {
             method: 'POST',
-            body: JSON.stringify({
-                titulo,
-                descricao,
-                limiteFila,
-                prazo_dias,
-                latitude,
-                longitude,
-                imagem_url: imagem_url || undefined
-            })
+            body: JSON.stringify(payload)
         });
 
         const dados = await res.json();
         
         if (res.ok) {
             showToast('Item criado com sucesso!');
-            document.getElementById('donateForm').reset();
-            limparImagemSelecionada();
-            document.getElementById('coordsDisplay').innerText = 'Coordenadas: será preenchido ao clicar';
+            resetarFormularioDoacao();
             navigateTab('myDonationsTab');
         } else {
             showToast(dados.erro || 'Erro ao criar', true);
         }
     } catch (erro) {
-        console.error('Erro:', erro);
+        console.error('Erro ao criar doação:', erro);
         showToast('Erro de conexão', true);
     }
 }
+
+async function atualizarDoacao(iditem) {
+    try {
+        const itemId = Number(iditem);
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+            showToast('ID da doação inválido.', true);
+            return;
+        }
+
+        const payload = getDonationFormPayload();
+        if (!payload) return;
+
+        const res = await fetchAPI(`/itens/${itemId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+        });
+        const dados = await res.json();
+
+        if (res.ok) {
+            showToast('Doação atualizada com sucesso!');
+            resetarFormularioDoacao();
+            navigateTab('myDonationsTab');
+            carregarItensDoBanco();
+            return;
+        }
+
+        showToast(dados.erro || 'Não foi possível atualizar a doação.', true);
+    } catch (erro) {
+        console.error('Erro ao atualizar doação:', erro);
+        showToast('Erro de conexão ao atualizar doação.', true);
+    }
+}
+
+async function abrirEdicaoDoacao(iditem) {
+    try {
+        const itemId = Number(iditem);
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+            showToast('Doação inválida.', true);
+            return;
+        }
+
+        const res = await fetchAPI(`/itens/${itemId}`);
+        const item = await res.json();
+        if (!res.ok) {
+            showToast(item.erro || 'Não foi possível carregar a doação para edição.', true);
+            return;
+        }
+
+        if (['reservada', 'finalizada'].includes(String(item.status || '').toLowerCase())) {
+            showToast('Esta doação já está reservada/finalizada e não pode ser editada.', true);
+            return;
+        }
+
+        closeModal('itemModal');
+        navigateTab('donateTab');
+        setTimeout(() => preencherFormularioEdicaoDoacao(item), 200);
+    } catch (erro) {
+        console.error('Erro ao abrir edição da doação:', erro);
+        showToast('Erro de conexão ao abrir edição.', true);
+    }
+}
+
+async function cancelarDoacao(iditem) {
+    try {
+        const itemId = Number(iditem);
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+            showToast('Doação inválida.', true);
+            return;
+        }
+
+        const confirmar = confirm('Tem certeza que deseja cancelar esta doação? Ela será removida da lista e as solicitações vinculadas serão canceladas.');
+        if (!confirmar) return;
+
+        const res = await fetchAPI(`/itens/${itemId}`, { method: 'DELETE' });
+        const dados = await res.json();
+
+        if (res.ok) {
+            showToast('Doação cancelada/removida com sucesso.');
+            if (itemBeingEdited && Number(itemBeingEdited.iditem) === itemId) resetarFormularioDoacao();
+            closeModal('itemModal');
+            carregarAtividades();
+            carregarMinhasDoacoes();
+            carregarItensDoBanco();
+            return;
+        }
+
+        showToast(dados.erro || 'Não foi possível cancelar a doação.', true);
+    } catch (erro) {
+        console.error('Erro ao cancelar doação:', erro);
+        showToast('Erro de conexão ao cancelar doação.', true);
+    }
+}
+
 
 // ============= ATIVIDADES =============
 function formatStatus(status) {
@@ -853,6 +1068,38 @@ function renderAvaliacaoDoadorButton(item) {
             data-titulo-item="${escapeAttr(item.titulo || '')}">
             <i class="fa-solid fa-star"></i> Avaliar beneficiário
         </button>`;
+}
+
+
+function podeEditarDoacao(item) {
+    const status = String(item.status || 'disponivel').toLowerCase();
+    const entregaStatus = String(item.entrega_status || '').toLowerCase();
+    return status === 'disponivel' && !['aceito', 'reservado', 'aguardando_entrega', 'em_processo', 'entregue'].includes(entregaStatus);
+}
+
+function podeCancelarDoacao(item) {
+    const status = String(item.status || '').toLowerCase();
+    const entregaStatus = String(item.entrega_status || '').toLowerCase();
+    return !['finalizada', 'entregue'].includes(status) && entregaStatus !== 'entregue';
+}
+
+function renderGerenciarDoacaoButtons(item) {
+    const iditem = Number(item.iditem || item.id || 0);
+    if (!iditem) return '';
+
+    const editar = podeEditarDoacao(item)
+        ? `<button class="btn btn-secondary btn-sm" data-action="editar-doacao" data-iditem="${iditem}">
+                <i class="fa-solid fa-pen-to-square"></i> Editar
+           </button>`
+        : '';
+
+    const cancelar = podeCancelarDoacao(item)
+        ? `<button class="btn btn-danger btn-sm" data-action="cancelar-doacao" data-iditem="${iditem}">
+                <i class="fa-solid fa-ban"></i> Cancelar doação
+           </button>`
+        : '';
+
+    return `${editar}${cancelar}`;
 }
 
 async function carregarAtividades() {
@@ -931,6 +1178,7 @@ async function carregarAtividades() {
                         ${beneficiarioHtml}
                         <div class="item-card-actions">
                             <button class="btn btn-secondary btn-sm" data-action="abrir-detalhes-doacao" data-iditem="${item.iditem}">Ver Detalhes</button>
+                            ${renderGerenciarDoacaoButtons(item)}
                             ${renderAvaliacaoDoadorButton(item)}
                         </div>
                     </div>
@@ -1138,6 +1386,7 @@ async function carregarMinhasDoacoes() {
                             <button class="btn btn-secondary btn-sm" data-action="ver-fila" data-iditem="${item.iditem}">
                                 <i class="fa-solid fa-users"></i> Fila
                             </button>
+                            ${renderGerenciarDoacaoButtons(item)}
                             ${item.status !== 'finalizada' ? `<button class="btn btn-primary btn-sm" data-action="finalizar-doacao" data-iditem="${item.iditem}">
                                 <i class="fa-solid fa-flag-checkered"></i> Finalizar
                             </button>` : ''}
@@ -1182,7 +1431,9 @@ async function abrirDetalhesDoacao(iditem) {
                 </div>
             </div>
         `;
-        actions.innerHTML = '<button class="btn btn-secondary" data-close-modal="itemModal">Fechar</button>';
+        const souDoador = currentUser && Number(item.usuario_idusuario) === Number(currentUser.idusuario);
+        const gerenciar = souDoador ? renderGerenciarDoacaoButtons(item) : '';
+        actions.innerHTML = `${gerenciar}<button class="btn btn-secondary" data-close-modal="itemModal">Fechar</button>`;
         openProfileModal('itemModal');
     } catch (erro) {
         console.error('Erro ao abrir detalhes:', erro);
@@ -1542,16 +1793,7 @@ function inicializarMapaDoacao() {
     mapElement._leaflet_map = mapaDoacao;
 
     mapaDoacao.on('click', (event) => {
-        const lat = event.latlng.lat;
-        const lon = event.latlng.lng;
-        document.getElementById('itemLatitude').value = lat.toFixed(6);
-        document.getElementById('itemLongitude').value = lon.toFixed(6);
-        document.getElementById('coordsDisplay').innerText = 
-            `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
-            
-        if (mapaDoacao._marker) mapaDoacao.removeLayer(mapaDoacao._marker);
-        mapaDoacao._marker = L.marker([lat, lon]).addTo(mapaDoacao)
-            .bindPopup('<strong>Local do Item</strong>').openPopup();
+        definirCoordenadasDoacao(event.latlng.lat, event.latlng.lng);
     });
 
     mapElement.dataset.initialized = 'true';

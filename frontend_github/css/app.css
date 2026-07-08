@@ -1340,3 +1340,22 @@
 .chat-empty-state small {
     color: var(--text-muted);
 }
+
+/* ============== Correção: gestão de doações pelo doador ============== */
+#cancelDonationEditBtn {
+    justify-content: center;
+}
+
+#donateTab .app-card {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.item-card-actions [data-action="editar-doacao"],
+.item-card-actions [data-action="cancelar-doacao"] {
+    white-space: normal;
+}
+
+#modalActions [data-action="editar-doacao"],
+#modalActions [data-action="cancelar-doacao"] {
+    width: 100%;
+}
